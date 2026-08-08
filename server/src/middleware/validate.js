@@ -21,6 +21,14 @@ const checkoutSchema = z.object({
   due_days: z.number().int().min(1).max(365).optional(),
 });
 
+// Artwork/avatars are rendered into <img src>, so only absolute https URLs are
+// accepted — this keeps javascript: and data: payloads out of the database.
+const httpsUrl = z
+  .string()
+  .max(500)
+  .url('Must be a valid URL')
+  .refine((v) => v.startsWith('https://'), 'Must be an https:// URL');
+
 const bookSchema = z.object({
   isbn: z.string().min(1, 'ISBN is required').max(20),
   title: z.string().min(1, 'Title is required').max(300),
@@ -29,10 +37,21 @@ const bookSchema = z.object({
   genre: z.string().max(100).optional().nullable(),
   copies_total: z.number().int().min(1).optional(),
   shelf_location: z.string().max(50).optional().nullable(),
+  cover_url: httpsUrl.optional().nullable(),
   branch_id: z.number().int().optional().nullable(),
 });
 
 const bookUpdateSchema = bookSchema.partial().omit({ isbn: true });
+
+const memberUpdateSchema = z.object({
+  full_name: z.string().min(1).max(200).optional(),
+  email: z.string().email('Invalid email').optional(),
+  phone: z.string().max(20).optional().nullable(),
+  user_type: z.enum(['student', 'faculty', 'postgraduate']).optional(),
+  programme: z.string().max(200).optional().nullable(),
+  account_status: z.enum(['active', 'suspended']).optional(),
+  avatar_url: httpsUrl.optional().nullable(),
+});
 
 const staffCreateSchema = z.object({
   knust_staff_id: z.string().min(1, 'Staff ID is required').max(30),
@@ -63,6 +82,6 @@ function validate(schema) {
 
 module.exports = {
   registerSchema, loginSchema, checkoutSchema,
-  bookSchema, bookUpdateSchema, staffCreateSchema, branchSchema,
+  bookSchema, bookUpdateSchema, memberUpdateSchema, staffCreateSchema, branchSchema,
   validate,
 };

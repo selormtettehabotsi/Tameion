@@ -28,6 +28,7 @@ exports.up = (pgm) => {
     },
     programme: { type: 'varchar(200)' },
     account_status: { type: 'varchar(20)', notNull: true, default: "'active'" },
+    avatar_url: { type: 'varchar(500)' },
     password_hash: { type: 'varchar(200)', notNull: true },
     email_verified: { type: 'boolean', notNull: true, default: false },
     email_token: { type: 'varchar(64)' },
@@ -63,8 +64,11 @@ exports.up = (pgm) => {
     copies_total: { type: 'integer', notNull: true, default: 1, check: 'copies_total >= 0' },
     copies_available: { type: 'integer', notNull: true, default: 1, check: 'copies_available >= 0' },
     shelf_location: { type: 'varchar(50)' },
+    cover_url: { type: 'varchar(500)' },
     branch_id: { type: 'integer', references: 'branch_libraries' },
   });
+  pgm.createIndex('books', 'title', { name: 'idx_books_title' });
+  pgm.createIndex('books', 'author', { name: 'idx_books_author' });
 
   // Loan transactions
   pgm.createTable('loan_transactions', {
@@ -108,14 +112,36 @@ exports.up = (pgm) => {
     fine_account_id: { type: 'integer', notNull: true, references: 'fine_accounts' },
     loan_transaction_id: { type: 'integer', notNull: true, references: 'loan_transactions' },
     days_overdue: { type: 'integer', notNull: true },
-    rate_per_day: { type: 'numeric(6,2)', notNull: true, default: 1.00 },
+    // pgm.func so the stored default is literally 1.00, matching schema.sql;
+    // a JS 1.00 serialises to "1" and shows up as catalog drift.
+    rate_per_day: { type: 'numeric(6,2)', notNull: true, default: pgm.func('1.00') },
     amount: { type: 'numeric(10,2)', notNull: true },
     settled: { type: 'boolean', notNull: true, default: false },
     settlement_date: { type: 'date' },
   });
+
+  // Audit log
+  pgm.createTable('audit_log', {
+    id: 'id',
+    actor_type: {
+      type: 'varchar(10)', notNull: true,
+      check: "actor_type IN ('staff', 'patron', 'system')",
+    },
+    actor_id: { type: 'integer' },
+    actor_name: { type: 'varchar(200)' },
+    action: { type: 'varchar(100)', notNull: true },
+    entity_type: { type: 'varchar(50)' },
+    entity_id: { type: 'varchar(100)' },
+    details: { type: 'jsonb' },
+    ip_address: { type: 'varchar(45)' },
+    created_at: { type: 'timestamp', notNull: true, default: pgm.func('NOW()') },
+  });
+  pgm.createIndex('audit_log', [{ name: 'created_at', sort: 'DESC' }], { name: 'idx_audit_log_created' });
+  pgm.createIndex('audit_log', 'action', { name: 'idx_audit_log_action' });
 };
 
 exports.down = (pgm) => {
+  pgm.dropTable('audit_log');
   pgm.dropTable('fine_transactions');
   pgm.dropTable('fine_accounts');
   pgm.dropTable('reservations');

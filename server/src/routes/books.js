@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
 
     const result = await pool.query(
       `SELECT b.id, b.isbn, b.title, b.author, b.publisher, b.genre,
-              b.copies_total, b.copies_available, b.shelf_location,
+              b.copies_total, b.copies_available, b.shelf_location, b.cover_url,
               b.branch_id, bl.branch_name
        FROM books b
        LEFT JOIN branch_libraries bl ON bl.id = b.branch_id
@@ -96,7 +96,7 @@ router.get('/:isbn', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT b.id, b.isbn, b.title, b.author, b.publisher, b.genre,
-              b.copies_total, b.copies_available, b.shelf_location,
+              b.copies_total, b.copies_available, b.shelf_location, b.cover_url,
               b.branch_id, bl.branch_name, bl.college, bl.location AS branch_location
        FROM books b
        LEFT JOIN branch_libraries bl ON bl.id = b.branch_id

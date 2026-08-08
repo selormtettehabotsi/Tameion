@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db/pool');
 const { requireAuth, requireStaff } = require('../middleware/auth');
-const { validate, checkoutSchema, bookSchema, staffCreateSchema, branchSchema } = require('../middleware/validate');
+const { validate, checkoutSchema, bookSchema, bookUpdateSchema, memberUpdateSchema, staffCreateSchema, branchSchema } = require('../middleware/validate');
 const { auditFromReq } = require('../lib/audit');
 
 const router = express.Router();
@@ -31,6 +31,7 @@ router.get('/dashboard', async (req, res) => {
     const stats = await pool.query(`
       SELECT
         (SELECT COUNT(*) FROM members) AS total_members,
+        (SELECT COUNT(*) FROM members WHERE account_status = 'active') AS active_members,
         (SELECT COUNT(*) FROM books) AS total_books,
         (SELECT COALESCE(SUM(copies_total), 0) FROM books) AS total_copies,
         (SELECT COUNT(*) FROM loan_transactions WHERE status = 'active') AS active_loans,
@@ -61,6 +62,7 @@ router.get('/dashboard', async (req, res) => {
       success: true,
       data: {
         totalMembers: parseInt(s.total_members),
+        activeMembers: parseInt(s.active_members),
         totalBooks: parseInt(s.total_books),
         totalCopies: parseInt(s.total_copies),
         activeLoans: parseInt(s.active_loans),
@@ -107,7 +109,7 @@ router.get('/members', async (req, res) => {
 
     const result = await pool.query(
       `SELECT m.id, m.knust_id, m.full_name, m.email, m.phone, m.user_type, m.programme,
-              m.account_status, m.created_at,
+              m.account_status, m.avatar_url, m.created_at,
               COALESCE(fa.outstanding_balance, 0) AS fine_balance
        FROM members m
        LEFT JOIN fine_accounts fa ON fa.member_id = m.id
@@ -151,20 +153,22 @@ router.get('/members/:id', async (req, res) => {
 });
 
 // Update member
-router.put('/members/:id', async (req, res) => {
+router.put('/members/:id', validate(memberUpdateSchema), async (req, res) => {
   try {
-    const { full_name, email, phone, user_type, programme, account_status } = req.body;
+    const { full_name, email, phone, user_type, programme, account_status, avatar_url } = req.body;
     const result = await pool.query(
       `UPDATE members SET full_name = COALESCE($1, full_name), email = COALESCE($2, email),
        phone = COALESCE($3, phone), user_type = COALESCE($4, user_type),
-       programme = COALESCE($5, programme), account_status = COALESCE($6, account_status)
-       WHERE id = $7 RETURNING id, knust_id, full_name, email, user_type, account_status`,
-      [full_name, email, phone, user_type, programme, account_status, req.params.id]
+       programme = COALESCE($5, programme), account_status = COALESCE($6, account_status),
+       avatar_url = COALESCE($7, avatar_url)
+       WHERE id = $8 RETURNING id, knust_id, full_name, email, user_type, account_status, avatar_url`,
+      [full_name, email, phone, user_type, programme, account_status, avatar_url, req.params.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, data: null, message: 'Member not found' });
     }
     res.json({ success: true, data: result.rows[0], message: 'Member updated' });
+    auditFromReq(req, 'member.update', 'member', req.params.id, { full_name: result.rows[0].full_name });
   } catch (err) {
     console.error('Member update error:', err);
     res.status(500).json({ success: false, data: null, message: 'Server error' });
@@ -322,7 +326,7 @@ router.post('/import/books', express.text({ type: 'text/csv', limit: '5mb' }), a
 // Create book
 router.post('/books', validate(bookSchema), async (req, res) => {
   try {
-    const { isbn, title, author, publisher, genre, copies_total, shelf_location, branch_id } = req.body;
+    const { isbn, title, author, publisher, genre, copies_total, shelf_location, cover_url, branch_id } = req.body;
 
     const existing = await pool.query('SELECT id FROM books WHERE isbn = $1', [isbn]);
     if (existing.rows.length > 0) {
@@ -331,10 +335,10 @@ router.post('/books', validate(bookSchema), async (req, res) => {
 
     const copies = copies_total || 1;
     const result = await pool.query(
-      `INSERT INTO books (isbn, title, author, publisher, genre, copies_total, copies_available, shelf_location, branch_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8)
+      `INSERT INTO books (isbn, title, author, publisher, genre, copies_total, copies_available, shelf_location, cover_url, branch_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9)
        RETURNING *`,
-      [isbn, title, author, publisher || null, genre || null, copies, shelf_location || null, branch_id || null]
+      [isbn, title, author, publisher || null, genre || null, copies, shelf_location || null, cover_url || null, branch_id || null]
     );
     res.status(201).json({ success: true, data: result.rows[0], message: 'Book added' });
     auditFromReq(req, 'book.create', 'book', isbn, { title, author });
@@ -345,9 +349,9 @@ router.post('/books', validate(bookSchema), async (req, res) => {
 });
 
 // Update book
-router.put('/books/:isbn', async (req, res) => {
+router.put('/books/:isbn', validate(bookUpdateSchema), async (req, res) => {
   try {
-    const { title, author, publisher, genre, copies_total, shelf_location, branch_id } = req.body;
+    const { title, author, publisher, genre, copies_total, shelf_location, cover_url, branch_id } = req.body;
 
     // If copies_total changes, adjust copies_available proportionally
     const current = await pool.query('SELECT copies_total, copies_available FROM books WHERE isbn = $1', [req.params.isbn]);
@@ -365,11 +369,13 @@ router.put('/books/:isbn', async (req, res) => {
       `UPDATE books SET title = COALESCE($1, title), author = COALESCE($2, author),
        publisher = COALESCE($3, publisher), genre = COALESCE($4, genre),
        copies_total = COALESCE($5, copies_total), copies_available = $6,
-       shelf_location = COALESCE($7, shelf_location), branch_id = COALESCE($8, branch_id)
-       WHERE isbn = $9 RETURNING *`,
-      [title, author, publisher, genre, copies_total, newAvailable, shelf_location, branch_id, req.params.isbn]
+       shelf_location = COALESCE($7, shelf_location), cover_url = COALESCE($8, cover_url),
+       branch_id = COALESCE($9, branch_id)
+       WHERE isbn = $10 RETURNING *`,
+      [title, author, publisher, genre, copies_total, newAvailable, shelf_location, cover_url, branch_id, req.params.isbn]
     );
     res.json({ success: true, data: result.rows[0], message: 'Book updated' });
+    auditFromReq(req, 'book.update', 'book', req.params.isbn, { title: result.rows[0].title });
   } catch (err) {
     console.error('Book update error:', err);
     res.status(500).json({ success: false, data: null, message: 'Server error' });

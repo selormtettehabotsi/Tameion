@@ -26,6 +26,7 @@ CREATE TABLE members (
   user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('student', 'faculty', 'postgraduate')),
   programme VARCHAR(200),
   account_status VARCHAR(20) NOT NULL DEFAULT 'active',
+  avatar_url VARCHAR(500),
   password_hash VARCHAR(200) NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   email_token VARCHAR(64),
@@ -58,8 +59,11 @@ CREATE TABLE books (
   copies_total INTEGER NOT NULL DEFAULT 1 CHECK (copies_total >= 0),
   copies_available INTEGER NOT NULL DEFAULT 1 CHECK (copies_available >= 0),
   shelf_location VARCHAR(50),
+  cover_url VARCHAR(500),
   branch_id INTEGER REFERENCES branch_libraries(id)
 );
+CREATE INDEX idx_books_title ON books (title);
+CREATE INDEX idx_books_author ON books (author);
 
 -- Loan transactions
 CREATE TABLE loan_transactions (

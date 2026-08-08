@@ -1,0 +1,119 @@
+# Decisions
+
+Choices made autonomously during the UI rebuild, recorded here rather than
+raised as questions. Newest section last.
+
+## Repository
+
+**Initialised a git repository.** The task asked for small commits; the
+directory was not a repo. `git init` plus a baseline commit of the code exactly
+as received, so every later change is a reviewable diff.
+
+**`.claude/` is git-ignored.** `.claude/settings.json` contains a live
+`ANTHROPIC_AUTH_TOKEN`. It is now ignored and was never committed. **That token
+was on disk in plaintext before this work started and should be rotated** — it
+is outside anything the code changes can fix.
+
+## Styling
+
+**Kept Tailwind; did not introduce a new styling library.** The project already
+had a Material-3-style token layer (CSS custom properties in `index.css` mapped
+into `tailwind.config.js`). Extending that was cheaper and less risky than
+replacing it, and it satisfies the "real design system" requirement directly.
+
+**Design tokens are the single source of truth.** Added radius, elevation,
+spacing, a 1.200 minor-third type scale, motion tokens and status accents
+(`success` / `warning` / `danger`) as CSS custom properties, then mapped every
+one into the Tailwind theme. Components use `rounded-md`, `shadow-sm`, `p-lg`,
+`text-2xs` — never raw pixel or hex values. The status tokens replaced hex
+literals (`#dcfce7`, `#166534`, `#fee2e2`, `#991b1b`) that had been pasted
+inline across a dozen components and did not adapt to dark mode.
+
+**Icons are inline SVG with Lucide geometry.** `components/Icon.tsx` holds a
+~50-glyph registry drawn with `currentColor`. This replaced the Material
+Symbols **webfont** (90 usages). Icon fonts are not emoji, but they are also
+not inline SVG, and the constraint asked for official SVG sources. Dropping the
+font also removed a render-blocking Google Fonts request and narrowed the CSP.
+
+**British-ish copy and `en-GB` dates.** KNUST is Ghanaian; `DD/MM/YYYY` reads
+correctly there, and "catalogue" matches local usage.
+
+## Imagery
+
+**Pexels, not Unsplash.** Both allow hotlinking. Pexels search pages render
+CDN URLs in server-side HTML, so real photo IDs could be harvested and verified
+rather than guessed. Unsplash's are behind client-side rendering.
+
+**Photo IDs live in one module (`client/src/lib/images.ts`).** Covers and
+avatars are selected by an FNV-1a hash of the ISBN / KNUST id, so a given record
+always shows the same picture across reloads and pages.
+
+**`cover_url` and `avatar_url` are left NULL in the seed data.** The columns
+exist so staff can attach real artwork through the admin UI, but seeding them
+would put URLs into SQL where `scripts/verify-images.mjs` cannot see them. Every
+image the app can render therefore comes from the audited module, and the audit
+covers 100% of them. The client falls back to the hashed photo whenever a
+stored URL is absent or fails to load.
+
+**Image URLs are validated as absolute `https://` on the server.** A shared Zod
+refinement rejects `javascript:`, `data:` and plain `http://`, so a stored
+attribute can never become an injection vector or mixed content.
+
+## Database
+
+**Added `books.cover_url` and `members.avatar_url`** (both `varchar(500)`,
+nullable) plus `idx_books_title` / `idx_books_author`, applied identically to
+`server/src/db/schema.sql` and `server/migrations/001_initial-schema.js`.
+
+**Neither schema file is treated as the source of truth.**
+`scripts/diff-schema.sh` applies each to a scratch database and diffs the live
+catalogs (columns, checks, keys, indexes). This surfaced two pre-existing
+drifts, both fixed: `audit_log` was missing from the migration entirely, and
+`rate_per_day`'s default serialised as `1` from the migration versus `1.00`
+from the SQL.
+
+## Server
+
+**Rate limiters skip under `NODE_ENV=test`.** `authLimiter` is mounted at module
+scope in `routes/auth.js`, so `createApp({ enableRateLimit: false })` could
+never reach it, and a full suite run exceeds 10 auth requests — one test was
+failing with 429 instead of 409 before any of this work. Production behaviour is
+unchanged.
+
+**Compose waits for Postgres to be healthy.** The `index.js` schedulers ran
+immediately at boot and logged `ECONNREFUSED` on every cold start. Fixed with a
+db healthcheck (`pg_isready -h 127.0.0.1`, forcing TCP so the socket-only init
+server cannot report ready before `seed.sql` runs) plus `depends_on:
+service_healthy`, and a `waitForDatabase()` guard so the jobs are also safe
+outside Docker.
+
+**Server logging goes through pino.** The four routers used `console.error`
+while `lib/logger.js` already existed; they now use `logger.error({ err }, ...)`.
+
+## Two bugs found while rebuilding registration
+
+Both were verified against the running server before and after the fix:
+
+1. The register form never sent `user_type`, which `registerSchema` requires —
+   **every registration failed with 400.** The form now has a member-type select.
+2. Anonymous visitors hold no CSRF token (they never hit `/auth/login` or
+   `/auth/me`), but `/auth/register` is deliberately *not* CSRF-exempt — so the
+   request would have been rejected with 403 even with a valid body.
+   `api.register` now fetches a token from `/auth/csrf-token` first.
+
+The member edit form also offered an "inactive" status that the server's enum
+rejects, and omitted "postgraduate"; its options now mirror `memberUpdateSchema`.
+
+## Security
+
+**No DOMPurify.** It was offered as a fallback for unavoidable injection. There
+is none to guard: no `innerHTML`, no `dangerouslySetInnerHTML`, no `eval`, no
+`new Function`, no `document.write`, no inline handlers. Adding a sanitiser
+would be dead weight.
+
+**`'unsafe-inline'` remains in `style-src`.** React writes inline `style`
+attributes for the progress bars and Vite injects the stylesheet. `script-src`
+has no `unsafe-inline` and no `unsafe-eval`.
+
+**A 401 in the browser console on first load is expected.** `AuthContext` probes
+`/auth/me`, which correctly returns 401 for anonymous visitors.

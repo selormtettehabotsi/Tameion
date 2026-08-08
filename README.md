@@ -26,10 +26,12 @@ A full-stack library management system built for KNUST. Session-based Express + 
 **Security**
 - CSRF protection on all state-changing routes
 - Rate limiting (global + auth-specific)
-- Input validation with Zod schemas
+- Input validation with Zod schemas; image URLs must be absolute `https://`
 - SQL injection prevention (parameterized queries, ILIKE wildcard escaping)
 - Session-based auth with secure cookie settings
-- Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+- Content-Security-Policy on both nginx and the API, `frame-ancestors 'none'`,
+  X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- No database credentials in compose files — everything comes from `.env`
 
 **Infrastructure**
 - Production Docker setup with nginx reverse proxy
@@ -52,6 +54,10 @@ A full-stack library management system built for KNUST. Session-based Express + 
 ```bash
 docker compose up --build
 ```
+
+Credentials and host ports come from the root `.env`; sensible defaults apply if
+it is absent, so the command above works on a fresh clone. Copy `.env.example`
+to `.env` to change them.
 
 - Client: **http://localhost:5173**
 - Server API: **http://localhost:5000**
@@ -129,6 +135,21 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/alms_test npm run test:
 ```
 
 Unit tests cover middleware (auth guards, Zod validation). Integration tests cover full HTTP request cycles against a real database (auth flows, book CRUD, reservations).
+
+### Verification scripts
+
+With the stack running (`docker compose up -d`):
+
+```bash
+bash scripts/smoke.sh          # every route's status, CSRF flow, role guards
+bash scripts/diff-schema.sh    # proves schema.sql and the migration match
+npm run verify:images          # every image URL returns HTTP 200
+```
+
+`diff-schema.sh` applies each schema definition to a throwaway database and
+diffs the resulting catalogs, because `server/src/db/schema.sql` and
+`server/migrations/001_initial-schema.js` are maintained by hand and nothing
+else keeps them in step.
 
 ## CI/CD
 

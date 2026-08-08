@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import Icon from './Icon';
 
 interface Props {
   isOpen: boolean;
@@ -39,13 +40,13 @@ export default function Modal({ isOpen, onClose, title, children, id = 'modal' }
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm">
-      <div className="bg-surface-container-lowest w-full max-w-lg rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.1)] border border-surface-container-highest flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-surface-container-highest flex justify-between items-center bg-surface-bright">
-          <h2 id={titleId} className="font-semibold text-xl text-on-surface">{title}</h2>
+      className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 p-md backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-surface-container-high bg-surface-container-lowest shadow-xl animate-slide-up">
+        <div className="flex items-center justify-between border-b border-surface-container-high bg-surface-bright px-lg py-md">
+          <h2 id={titleId} className="text-lg font-semibold text-on-surface">{title}</h2>
           <button onClick={onClose} aria-label="Close dialog"
-            className="text-on-surface-variant hover:text-on-surface p-1 rounded-md hover:bg-surface-container-low transition-colors">
-            <span className="material-symbols-outlined" aria-hidden="true">close</span>
+            className="rounded-sm p-3xs text-on-surface-variant transition-colors duration-fast hover:bg-surface-container-low hover:text-on-surface">
+            <Icon name="x" size={20} />
           </button>
         </div>
         {children}

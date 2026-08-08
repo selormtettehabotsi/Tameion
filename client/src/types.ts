@@ -76,6 +76,7 @@ export interface Book {
   copies_total: number;
   copies_available: number;
   shelf_location: string | null;
+  cover_url: string | null;
   branch_id: number | null;
   branch_name: string | null;
 }
@@ -116,6 +117,7 @@ export interface PaginatedAdminFines {
 
 export interface AdminDashboardData {
   totalMembers: number;
+  activeMembers: number;
   totalBooks: number;
   totalCopies: number;
   activeLoans: number;
@@ -148,6 +150,7 @@ export interface Member {
   user_type: string;
   programme: string | null;
   account_status: string;
+  avatar_url: string | null;
   created_at: string;
   fine_balance: string;
   loans?: Loan[];

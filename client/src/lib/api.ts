@@ -25,13 +25,27 @@ async function r<T>(p: string, o: RequestInit = {}): Promise<ApiResponse<T>> {
 function j(b: unknown) { return JSON.stringify(b); }
 function qs(p?: Record<string, string>) { return p ? '?' + new URLSearchParams(p).toString() : ''; }
 
+/**
+ * Anonymous visitors never hit /auth/login or /auth/me, so they hold no CSRF
+ * token — yet /auth/register is deliberately NOT csrf-exempt. Fetch a token
+ * from the session before any anonymous state-changing request.
+ */
+async function ensureCsrfToken() {
+  if (csrfToken) return;
+  const res = await r<{ token: string }>('/auth/csrf-token');
+  if (res.data?.token) setCsrfToken(res.data.token);
+}
+
 export const api = {
   login: async (id: string, pw: string) => {
     const res = await r<{ isStaff: boolean; csrfToken?: string }>('/auth/login', { method: 'POST', body: j({ identifier: id, password: pw }) });
     if (res.data?.csrfToken) setCsrfToken(res.data.csrfToken);
     return res;
   },
-  register: (f: Record<string, string>) => r<null>('/auth/register', { method: 'POST', body: j(f) }),
+  register: async (f: Record<string, string>) => {
+    await ensureCsrfToken();
+    return r<null>('/auth/register', { method: 'POST', body: j(f) });
+  },
   logout: async () => { const res = await r<null>('/auth/logout', { method: 'POST' }); csrfToken = ''; return res; },
   me: async () => {
     const res = await r<User>('/auth/me');

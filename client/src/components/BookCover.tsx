@@ -1,38 +1,51 @@
 import { useState } from 'react';
-import { coverUrl } from '../lib/covers';
+import { coverFallback } from '../lib/images';
 
 interface Props {
   isbn: string;
   title: string;
-  size?: 'S' | 'M' | 'L';
+  /** Publisher artwork stored on the book record, if any. */
+  coverUrl?: string | null;
+  width?: number;
+  height?: number;
   className?: string;
 }
 
-export default function BookCover({ isbn, title, size = 'M', className = '' }: Props) {
-  const [failed, setFailed] = useState(false);
+/**
+ * Book artwork with a two-step fallback:
+ *   1. the cover_url stored on the record
+ *   2. a photographic stand-in chosen deterministically from the ISBN
+ * Both are real photographs, so a book never renders as an empty box.
+ */
+export default function BookCover({
+  isbn,
+  title,
+  coverUrl,
+  width = 400,
+  height = 600,
+  className = '',
+}: Props) {
+  const fallback = coverFallback(isbn, width, height);
+  const [src, setSrc] = useState(coverUrl || fallback);
   const [loaded, setLoaded] = useState(false);
 
-  if (failed) {
-    return (
-      <div className={`flex items-center justify-center bg-surface-container-low ${className}`}>
-        <span className="material-symbols-outlined text-6xl text-outline-variant">menu_book</span>
-      </div>
-    );
-  }
-
   return (
-    <div className={`relative overflow-hidden ${className}`}>
-      {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-surface-container-low" />
-      )}
+    <div className={`relative overflow-hidden bg-surface-container ${className}`}>
+      {!loaded && <div className="absolute inset-0 animate-pulse bg-surface-container-high" />}
       <img
-        src={coverUrl(isbn, size)}
+        src={src}
         alt={`Cover of ${title}`}
+        width={width}
+        height={height}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
-        className={`object-cover w-full h-full transition-opacity duration-300${!loaded ? ' opacity-0' : ' opacity-100'}`}
+        onError={() => {
+          // Stored artwork failed — drop to the verified photographic fallback.
+          if (src !== fallback) setSrc(fallback);
+          else setLoaded(true);
+        }}
+        className={`h-full w-full object-cover transition-opacity duration-normal ${loaded ? 'opacity-100' : 'opacity-0'}`}
       />
     </div>
   );

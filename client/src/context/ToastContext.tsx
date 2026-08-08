@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import Icon, { type IconName } from '../components/Icon';
 
 interface Toast {
   id: number;
@@ -27,9 +28,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const dismiss = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
 
-  const iconMap = { success: 'check_circle', error: 'error', info: 'info' };
-  const colorMap = {
-    success: 'bg-[#dcfce7] text-[#166534] border-[#166534]/20',
+  const iconMap: Record<Toast['type'], IconName> = {
+    success: 'circle-check',
+    error: 'circle-alert',
+    info: 'info',
+  };
+  const colorMap: Record<Toast['type'], string> = {
+    success: 'bg-success-container text-on-success-container border-success/20',
     error: 'bg-error-container text-on-error-container border-error/20',
     info: 'bg-primary-container text-on-primary-container border-primary/20',
   };
@@ -37,14 +42,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div
+        className="pointer-events-none fixed bottom-md right-md z-[100] flex flex-col gap-xs"
+        role="region"
+        aria-live="polite"
+        aria-label="Notifications"
+      >
         {toasts.map(t => (
           <div key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg text-sm font-medium animate-slide-up max-w-sm ${colorMap[t.type]}`}>
-            <span className="material-symbols-outlined text-[20px]">{iconMap[t.type]}</span>
+            className={`pointer-events-auto flex max-w-sm items-center gap-sm rounded-md border px-md py-sm text-sm font-medium shadow-lg animate-slide-up ${colorMap[t.type]}`}>
+            <Icon name={iconMap[t.type]} size={18} />
             <span className="flex-1">{t.message}</span>
-            <button onClick={() => dismiss(t.id)} className="opacity-60 hover:opacity-100 transition-opacity">
-              <span className="material-symbols-outlined text-[18px]">close</span>
+            <button onClick={() => dismiss(t.id)} aria-label="Dismiss notification"
+              className="opacity-60 transition-opacity duration-fast hover:opacity-100">
+              <Icon name="x" size={16} />
             </button>
           </div>
         ))}

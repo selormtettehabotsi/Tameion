@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
+import Icon from './Icon';
 
 interface Props { children: ReactNode; }
 interface State { hasError: boolean; error: Error | null; }
@@ -11,21 +12,24 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, info.componentStack);
+    // Kept out of production bundles; the fallback UI is what users see.
+    if (import.meta.env.DEV) {
+      console.error('ErrorBoundary caught:', error, info.componentStack);
+    }
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-6">
-          <div className="bg-surface-container-lowest rounded-xl border border-surface-container-highest shadow-lg p-8 max-w-md w-full text-center">
-            <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-error text-[32px]">error</span>
+        <div className="flex min-h-screen items-center justify-center bg-background p-lg">
+          <div className="w-full max-w-md rounded-lg border border-surface-container-high bg-surface-container-lowest p-xl text-center shadow-lg">
+            <div className="mx-auto mb-md grid h-16 w-16 place-items-center rounded-full bg-error-container text-error">
+              <Icon name="triangle-alert" size={30} />
             </div>
-            <h1 className="text-xl font-semibold text-on-surface mb-2">Something went wrong</h1>
-            <p className="text-sm text-on-surface-variant mb-6">{this.state.error?.message || 'An unexpected error occurred.'}</p>
+            <h1 className="mb-2xs text-xl font-semibold text-on-surface">Something went wrong</h1>
+            <p className="mb-lg text-sm text-on-surface-variant">{this.state.error?.message || 'An unexpected error occurred.'}</p>
             <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/'; }}
-              className="px-6 py-2.5 bg-primary text-on-primary rounded-lg font-medium hover:bg-primary-container hover:text-on-primary-container transition-colors">
+              className="rounded-md bg-primary px-lg py-xs text-sm font-semibold text-on-primary transition-colors duration-fast hover:bg-primary-container hover:text-on-primary-container">
               Return to Home
             </button>
           </div>

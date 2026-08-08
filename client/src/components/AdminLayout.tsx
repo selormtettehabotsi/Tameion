@@ -2,18 +2,20 @@ import { Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../hooks/useTheme';
+import Icon, { type IconName } from './Icon';
+import Avatar from './Avatar';
 
-const navItems = [
-  { path: '/admin', icon: 'dashboard', label: 'Dashboard' },
-  { path: '/admin/members', icon: 'group', label: 'Members' },
-  { path: '/admin/books', icon: 'menu_book', label: 'Books' },
-  { path: '/admin/loans', icon: 'calendar_today', label: 'Loans' },
-  { path: '/admin/fines', icon: 'payments', label: 'Fines' },
+const navItems: { path: string; icon: IconName; label: string }[] = [
+  { path: '/admin', icon: 'layout-dashboard', label: 'Dashboard' },
+  { path: '/admin/members', icon: 'users', label: 'Members' },
+  { path: '/admin/books', icon: 'book-open', label: 'Books' },
+  { path: '/admin/loans', icon: 'calendar', label: 'Loans' },
+  { path: '/admin/fines', icon: 'banknote', label: 'Fines' },
   { path: '/admin/reservations', icon: 'bookmark', label: 'Reservations' },
-  { path: '/admin/staff', icon: 'badge', label: 'Staff' },
-  { path: '/admin/branches', icon: 'account_balance', label: 'Branches' },
+  { path: '/admin/staff', icon: 'id-card', label: 'Staff' },
+  { path: '/admin/branches', icon: 'landmark', label: 'Branches' },
   { path: '/admin/audit-log', icon: 'history', label: 'Audit Log' },
-  { path: '/admin/reports', icon: 'bar_chart', label: 'Reports' },
+  { path: '/admin/reports', icon: 'chart-bar', label: 'Reports' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -28,54 +30,70 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     navigate('/login');
   };
 
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.isStaff) return <Navigate to="/login" replace />;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-on-surface-variant">
+        Loading...
+      </div>
+    );
+  }
+  if (!user || !user.isStaff) return <Navigate to="/login" replace />;
 
   const isActive = (path: string) => location.pathname === path;
 
   const sidebar = (
-    <nav className="flex flex-col py-6 h-full bg-surface-container-low">
-      <div className="px-4 pb-4 border-b border-surface-container-high mb-4">
-        <div className="flex items-center gap-2 mb-6">
-          <span className="font-bold text-2xl text-primary">Tameion</span>
+    <nav className="flex h-full flex-col bg-surface-container-low py-lg" aria-label="Admin navigation">
+      <div className="mb-md border-b border-surface-container-high px-md pb-md">
+        <div className="mb-lg flex items-center gap-xs text-xl font-bold text-primary">
+          <Icon name="book-open" size={24} />
+          Tameion
         </div>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
-            <span className="material-symbols-outlined text-on-primary-container">admin_panel_settings</span>
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-on-surface">{user.name}</h2>
-            <p className="text-xs tracking-wider text-on-surface-variant">Admin Terminal</p>
+        <div className="flex items-center gap-sm">
+          <Avatar seed={user.knust_id} name={user.name} size={40} />
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-on-surface">{user.name}</h2>
+            <p className="text-2xs uppercase tracking-wider text-on-surface-variant">
+              {user.role === 'admin' ? 'Administrator' : 'Librarian'}
+            </p>
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-1">
-        <ul className="space-y-1">
-          {navItems.map(item => (
+
+      <div className="flex-1 overflow-y-auto px-2xs">
+        <ul className="space-y-3xs">
+          {navItems.map((item) => (
             <li key={item.path}>
-              <Link to={item.path} onClick={() => setSideOpen(false)}
-                className={`flex items-center px-4 py-2 rounded-lg mx-2 text-xs tracking-wider font-medium transition-colors ${
+              <Link
+                to={item.path}
+                onClick={() => setSideOpen(false)}
+                aria-current={isActive(item.path) ? 'page' : undefined}
+                className={`mx-2xs flex items-center gap-xs rounded-md px-sm py-xs text-xs font-semibold transition-colors duration-fast ${
                   isActive(item.path)
                     ? 'bg-primary-container text-on-primary-container'
                     : 'text-on-surface-variant hover:bg-surface-container-high'
-                }`}>
-                <span className="material-symbols-outlined mr-2 text-[20px]">{item.icon}</span>
+                }`}
+              >
+                <Icon name={item.icon} size={18} />
                 {item.label}
               </Link>
             </li>
           ))}
         </ul>
       </div>
-      <div className="px-4 pt-4 border-t border-surface-container-high mt-auto space-y-2">
-        <button onClick={toggleTheme}
-          className="flex items-center w-full px-4 py-2 rounded-lg mx-0 text-on-surface-variant hover:bg-surface-container-high transition-colors text-xs tracking-wider font-medium">
-          <span className="material-symbols-outlined mr-2 text-[20px]">{theme === 'dark' ? 'light_mode' : 'dark_mode'}</span>
+
+      <div className="mt-auto space-y-3xs border-t border-surface-container-high px-md pt-md">
+        <button
+          onClick={toggleTheme}
+          className="flex w-full items-center gap-xs rounded-md px-sm py-xs text-xs font-semibold text-on-surface-variant transition-colors duration-fast hover:bg-surface-container-high"
+        >
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
           {theme === 'dark' ? 'Light mode' : 'Dark mode'}
         </button>
-        <button onClick={handleLogout}
-          className="flex items-center w-full px-4 py-2 rounded-lg mx-0 text-error hover:bg-error-container transition-colors text-xs tracking-wider font-medium">
-          <span className="material-symbols-outlined mr-2 text-[20px]">logout</span>
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-xs rounded-md px-sm py-xs text-xs font-semibold text-error transition-colors duration-fast hover:bg-error-container"
+        >
+          <Icon name="log-out" size={18} />
           Logout
         </button>
       </div>
@@ -83,19 +101,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {sideOpen && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setSideOpen(false)} />}
-      <aside className={`fixed top-0 left-0 h-screen w-64 z-50 transform transition-transform md:translate-x-0 ${sideOpen ? 'translate-x-0' : '-translate-x-full'} md:block`}>
+    <div className="flex min-h-screen bg-background">
+      {sideOpen && (
+        <button
+          className="fixed inset-0 z-40 bg-on-surface/40 md:hidden"
+          onClick={() => setSideOpen(false)}
+          aria-label="Close navigation"
+        />
+      )}
+      <aside
+        className={`fixed left-0 top-0 z-50 h-screen w-64 transform transition-transform duration-normal md:translate-x-0 ${
+          sideOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         {sidebar}
       </aside>
-      <div className="flex-1 md:ml-64">
-        <div className="md:hidden sticky top-0 z-30 bg-surface border-b border-outline-variant px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSideOpen(true)}><span className="material-symbols-outlined">menu</span></button>
-          <span className="font-bold text-lg text-primary">Tameion</span>
+
+      <div className="min-w-0 flex-1 md:ml-64">
+        <div className="sticky top-0 z-30 flex items-center gap-sm border-b border-outline-variant bg-surface px-md py-sm md:hidden">
+          <button onClick={() => setSideOpen(true)} aria-label="Open navigation" aria-expanded={sideOpen}>
+            <Icon name="menu" size={22} />
+          </button>
+          <span className="flex items-center gap-2xs text-base font-bold text-primary">
+            <Icon name="book-open" size={20} />
+            Tameion
+          </span>
         </div>
-        <main className="p-4 md:p-10 max-w-[1440px]">
-          {children}
-        </main>
+        <main className="mx-auto w-full max-w-shell p-md md:p-xl">{children}</main>
       </div>
     </div>
   );

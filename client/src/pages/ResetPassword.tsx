@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import AuthLayout from '../components/AuthLayout';
+import Icon from '../components/Icon';
+import { Alert, Button, Input } from '../components/ui';
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
@@ -12,37 +15,59 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault(); setError('');
+    e.preventDefault();
+    setError('');
     if (password !== confirm) { setError('Passwords do not match'); return; }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
     setLoading(true);
-    try { await api.resetPassword(token, password); setDone(true); }
-    catch (err: any) { setError(err.message || 'Reset failed'); }
-    finally { setLoading(false); }
+    try {
+      await api.resetPassword(token, password);
+      setDone(true);
+    } catch (err) {
+      const message = err instanceof Object && 'message' in err ? String(err.message) : 'Reset failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const ic = 'w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm text-on-surface outline-none';
+  if (done) {
+    return (
+      <AuthLayout title="Password updated" subtitle="You can sign in with your new password">
+        <div className="text-center">
+          <div className="mx-auto mb-md grid h-14 w-14 place-items-center rounded-full bg-success-container text-on-success-container">
+            <Icon name="circle-check" size={26} />
+          </div>
+          <p className="text-sm text-on-surface-variant">Your password has been changed.</p>
+          <Link to="/login" className="mt-lg inline-block">
+            <Button>Go to login</Button>
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
-    <div className="bg-background min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md text-center">
-        <div className="w-16 h-16 bg-primary-container rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="material-symbols-outlined text-on-primary-container text-3xl">{done ? 'check_circle' : 'lock_reset'}</span>
+    <AuthLayout title="Set a new password" subtitle="Choose something you have not used before">
+      {error && (
+        <div className="mb-md">
+          <Alert tone="danger" title="Could not reset password">{error}</Alert>
         </div>
-        <h1 className="font-semibold text-2xl text-primary mb-2">{done ? 'Password Reset' : 'Set New Password'}</h1>
-        {done ? (
-          <><p className="text-on-surface-variant mb-6">Your password has been updated.</p><Link to="/login" className="text-primary font-semibold hover:underline">Go to Login</Link></>
-        ) : (
-          <div className="bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-surface-variant p-6 text-left mt-4">
-            {error && <div className="bg-error-container text-on-error-container p-3 rounded-lg mb-4 text-sm border border-error/20">{error}</div>}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div><label className="text-xs tracking-wider font-medium text-on-surface mb-1 block">New Password</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={ic} placeholder="Min 8 characters" /></div>
-              <div><label className="text-xs tracking-wider font-medium text-on-surface mb-1 block">Confirm Password</label><input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} className={ic} /></div>
-              <button type="submit" disabled={loading} className="w-full bg-primary hover:bg-on-primary-fixed-variant text-on-primary font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">{loading ? 'Resetting...' : 'Reset Password'}</button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+      {!token && (
+        <div className="mb-md">
+          <Alert tone="warning" title="Missing reset token">
+            Open the link from your reset email to continue.
+          </Alert>
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-md">
+        <Input label="New password" type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" />
+        <Input label="Confirm password" type="password" required autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} />
+        <Button type="submit" size="lg" disabled={loading || !token} className="w-full">
+          {loading ? 'Resetting…' : 'Reset password'}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }

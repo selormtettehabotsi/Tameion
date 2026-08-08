@@ -1,186 +1,229 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import type { Book, Branch, Pagination } from '../types';
+import type { Book, Pagination, Branch } from '../types';
+import { HERO_IMAGE } from '../lib/images';
 import Navbar from '../components/Navbar';
-import PaginationBar from '../components/PaginationBar';
 import BookCover from '../components/BookCover';
+import PaginationBar from '../components/PaginationBar';
+import EmptyState from '../components/EmptyState';
+import Icon from '../components/Icon';
+import { Badge, Button, Input, Select } from '../components/ui';
+
+const SORTS = [
+  { value: 'title', label: 'Title (A–Z)' },
+  { value: 'author', label: 'Author (A–Z)' },
+  { value: 'newest', label: 'Recently added' },
+];
 
 export default function Catalog() {
   const [books, setBooks] = useState<Book[]>([]);
   const [genres, setGenres] = useState<string[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 12, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState('');
+
+  // `query` is what the user is typing; `search` is the committed term.
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
   const [genre, setGenre] = useState('');
   const [branch, setBranch] = useState('');
   const [available, setAvailable] = useState(false);
-  const [sort, setSort] = useState('');
+  const [sort, setSort] = useState('title');
 
-  const fetchBooks = async (page = 1) => {
+  const fetchBooks = useCallback((page: number) => {
     setLoading(true);
-    try {
-      const params: Record<string, string> = { page: String(page), limit: '20' };
-      if (q) params.q = q;
-      if (genre) params.genre = genre;
-      if (branch) params.branch = branch;
-      if (available) params.available = 'true';
-      if (sort) params.sort = sort;
-      const res = await api.books(params);
-      setBooks(res.data.books);
-      setGenres(res.data.filters.genres);
-      setBranches(res.data.filters.branches);
-      setPagination(res.data.pagination);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    const params: Record<string, string> = { page: String(page), limit: '12', sort };
+    if (search) params.q = search;
+    if (genre) params.genre = genre;
+    if (branch) params.branch = branch;
+    if (available) params.available = 'true';
+
+    api.books(params)
+      .then(r => {
+        setBooks(r.data.books);
+        setPagination(r.data.pagination);
+        setGenres(r.data.filters.genres);
+        setBranches(r.data.filters.branches);
+      })
+      .finally(() => setLoading(false));
+  }, [search, genre, branch, available, sort]);
+
+  useEffect(() => { fetchBooks(1); }, [fetchBooks]);
+
+  const activeFilters = [genre, branch, available ? 'available' : '', search].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setQuery(''); setSearch(''); setGenre(''); setBranch(''); setAvailable(false); setSort('title');
   };
 
-  useEffect(() => { fetchBooks(1); }, [genre, branch, available, sort]);
-
-  const handleSearch = (e: FormEvent) => { e.preventDefault(); fetchBooks(1); };
-
-  const sel = 'appearance-none bg-surface border border-outline-variant rounded-md pl-3 pr-8 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary hover:bg-surface-container-low transition-colors cursor-pointer';
-
   return (
-    <div className="bg-background min-h-screen flex flex-col">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="flex-grow w-full max-w-[1440px] mx-auto px-4 md:px-10 py-8">
-        {/* Hero Search */}
-        <section className="mb-8 relative overflow-hidden rounded-2xl shadow-lg" style={{minHeight: '220px'}}>
-          <img src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1400&q=80&auto=format&fit=crop" alt="" className="absolute inset-0 w-full h-full object-cover" loading="eager" />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/75 to-[#003318]/60" />
-          <div className="relative p-8 md:p-12 flex-grow w-full md:max-w-2xl">
-            <h1 className="font-bold text-3xl md:text-5xl text-white mb-2 tracking-tight">Library Catalog</h1>
-            <p className="text-base text-white/80 mb-6">Search our extensive collection of academic and recreational resources.</p>
-            <form onSubmit={handleSearch} className="relative w-full group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary transition-colors">
-                <span className="material-symbols-outlined">search</span>
+
+      {/* Hero */}
+      <section className="relative isolate overflow-hidden">
+        <img
+          src={HERO_IMAGE}
+          alt=""
+          width={1600}
+          height={900}
+          className="absolute inset-0 -z-10 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#04140a]/95 via-[#04140a]/80 to-[#04140a]/40" />
+        <div className="mx-auto w-full max-w-shell px-md py-2xl md:px-xl md:py-3xl">
+          <div className="max-w-xl">
+            <Badge tone="info" icon="library" className="mb-md">
+              KNUST University Library
+            </Badge>
+            <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">
+              Find your next book.
+            </h1>
+            <p className="mt-sm text-sm text-white/80 md:text-base">
+              Search the full catalogue across every branch library, check live availability,
+              and place a hold in one step.
+            </p>
+
+            <form
+              className="mt-lg flex flex-col gap-xs sm:flex-row"
+              onSubmit={(e) => { e.preventDefault(); setSearch(query); }}
+              role="search"
+            >
+              <div className="flex-1">
+                <Input
+                  icon="search"
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by title, author or ISBN"
+                  aria-label="Search the catalogue"
+                />
               </div>
-              <input type="text" value={q} onChange={e => setQ(e.target.value)}
-                className="w-full pl-12 pr-24 py-4 rounded-lg border-0 bg-white/95 dark:bg-surface focus:ring-2 focus:ring-white/40 transition-all text-base placeholder-on-surface-variant/70 text-on-surface shadow-lg"
-                placeholder="Search books, authors, or ISBNs..." />
-              <button type="submit" className="absolute inset-y-2 right-2 px-5 bg-primary text-on-primary text-xs tracking-wider font-medium rounded-md hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+              <Button type="submit" size="lg">
+                <Icon name="search" size={16} />
                 Search
-              </button>
+              </Button>
             </form>
           </div>
-        </section>
+        </div>
+      </section>
 
+      <main className="mx-auto w-full max-w-shell px-md py-xl md:px-xl">
         {/* Filters */}
-        <section className="mb-6 bg-surface-container-lowest p-4 rounded-lg border border-outline-variant shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2 text-on-surface-variant text-xs tracking-wider font-medium">
-              <span className="material-symbols-outlined text-[18px]">filter_list</span> Filters:
-            </div>
-            <div className="relative">
-              <select value={genre} onChange={e => setGenre(e.target.value)} className={sel}>
-                <option value="">All Genres</option>
-                {genres.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px]">arrow_drop_down</span>
-              </div>
-            </div>
-            <div className="relative">
-              <select value={branch} onChange={e => setBranch(e.target.value)} className={sel}>
-                <option value="">All Branches</option>
-                {branches.map(b => <option key={b.id} value={String(b.id)}>{b.branch_name}</option>)}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px]">arrow_drop_down</span>
-              </div>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <div className="relative">
-                <input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)} className="sr-only peer" />
-                <div className="w-10 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-              </div>
-              <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">Available Only</span>
+        <div className="mb-lg flex flex-col gap-sm rounded-lg border border-surface-container-high bg-surface-container-lowest p-md shadow-sm md:flex-row md:items-end">
+          <div className="grid flex-1 grid-cols-1 gap-sm sm:grid-cols-3">
+            <Select
+              label="Genre"
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              options={[{ value: '', label: 'All genres' }, ...genres.map(g => ({ value: g, label: g }))]}
+            />
+            <Select
+              label="Branch"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              options={[{ value: '', label: 'All branches' }, ...branches.map(b => ({ value: String(b.id), label: b.branch_name }))]}
+            />
+            <Select
+              label="Sort by"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              options={SORTS}
+            />
+          </div>
+          <div className="flex items-center gap-md pb-3xs">
+            <label className="flex cursor-pointer items-center gap-2xs text-xs font-semibold text-on-surface">
+              <input
+                type="checkbox"
+                checked={available}
+                onChange={(e) => setAvailable(e.target.checked)}
+                className="h-4 w-4 rounded-xs accent-[var(--color-primary)]"
+              />
+              Available only
             </label>
+            {activeFilters > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <Icon name="x" size={14} />
+                Clear
+              </Button>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-on-surface-variant text-xs tracking-wider font-medium">Sort by:</span>
-            <div className="relative">
-              <select value={sort} onChange={e => setSort(e.target.value)} className={sel}>
-                <option value="">Relevance</option>
-                <option value="title_asc">Title (A-Z)</option>
-                <option value="title_desc">Title (Z-A)</option>
-                <option value="author_asc">Author (A-Z)</option>
-                <option value="newest">Newest First</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px]">sort</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="mb-4 flex justify-between items-center px-2">
-          <p className="text-sm text-on-surface-variant">Showing <span className="font-semibold text-on-surface">{books.length}</span> of <span className="font-semibold text-on-surface">{pagination.total}</span> results</p>
         </div>
 
-        {/* Book Grid */}
+        <div className="mb-md flex items-baseline justify-between">
+          <h2 className="text-lg font-semibold text-on-surface">
+            {loading ? 'Searching…' : `${pagination.total} ${pagination.total === 1 ? 'book' : 'books'}`}
+          </h2>
+          {search && !loading && (
+            <p className="text-xs text-on-surface-variant">
+              for <span className="font-semibold text-on-surface">“{search}”</span>
+            </p>
+          )}
+        </div>
+
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1,2,3,4].map(i => (
-              <article key={i} className="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden animate-pulse">
-                <div className="h-48 bg-surface-container-high border-b border-outline-variant" />
-                <div className="p-4 space-y-3">
-                  <div className="h-5 bg-surface-container-high rounded w-3/4" />
-                  <div className="h-4 bg-surface-container-high rounded w-1/2" />
-                  <div className="h-4 bg-surface-container-high rounded w-1/3" />
+          <div className="grid grid-cols-2 gap-md sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="overflow-hidden rounded-lg border border-surface-container-high bg-surface-container-lowest">
+                <div className="aspect-[2/3] animate-pulse bg-surface-container-high" />
+                <div className="space-y-2xs p-sm">
+                  <div className="h-3 w-full animate-pulse rounded-xs bg-surface-container-high" />
+                  <div className="h-3 w-2/3 animate-pulse rounded-xs bg-surface-container-high" />
                 </div>
-              </article>
+              </div>
             ))}
           </div>
+        ) : books.length === 0 ? (
+          <div className="rounded-lg border border-surface-container-high bg-surface-container-lowest">
+            <EmptyState
+              kind="books"
+              title="No books match those filters"
+              description="Try a different search term, or clear the filters to browse the whole catalogue."
+              action={<Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
+            />
+          </div>
         ) : (
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-md sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {books.map(book => (
-              <Link to={'/books/' + book.isbn} key={book.isbn}
-                className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
-                <div className="h-40 bg-surface-container-low relative overflow-hidden flex items-center justify-center border-b border-outline-variant">
-                  <BookCover isbn={book.isbn} title={book.title} className="w-full h-full group-hover:scale-105 transition-transform" />
-                  {book.genre && (
-                    <div className="absolute top-3 left-3 bg-tertiary-container text-on-tertiary-container text-[10px] uppercase tracking-wider font-medium px-2 py-1 rounded-sm shadow-sm">
-                      {book.genre}
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 flex flex-col flex-grow">
-                  <h2 className="font-semibold text-base text-on-surface leading-tight line-clamp-2 group-hover:text-primary transition-colors">{book.title}</h2>
-                  <p className="text-sm text-on-surface-variant mt-1 mb-4">{book.author}</p>
-                  <div className="mt-auto space-y-3">
-                    {book.branch_name && (
-                      <div className="flex items-center gap-2 text-on-surface-variant text-xs tracking-wider font-medium">
-                        <span className="material-symbols-outlined text-[16px]">domain</span>
-                        <span>{book.branch_name}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center pt-3 border-t border-surface-container-highest">
-                      <span className={'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ' +
-                        (book.copies_available > 0 ? 'bg-primary/10 text-primary' : 'bg-error/10 text-error')}>
-                        <span className={'w-1.5 h-1.5 rounded-full mr-1.5 ' + (book.copies_available > 0 ? 'bg-primary' : 'bg-error')} />
-                        {book.copies_available > 0 ? 'Available' : 'Unavailable'}
-                      </span>
-                      <span className="text-xs text-on-surface-variant">{book.copies_available}/{book.copies_total}</span>
-                    </div>
+              <Link
+                key={book.isbn}
+                to={`/books/${book.isbn}`}
+                className="group flex flex-col overflow-hidden rounded-lg border border-surface-container-high bg-surface-container-lowest shadow-sm transition-shadow duration-normal hover:shadow-md"
+              >
+                <div className="relative aspect-[2/3] overflow-hidden">
+                  <BookCover
+                    isbn={book.isbn}
+                    title={book.title}
+                    coverUrl={book.cover_url}
+                    width={400}
+                    height={600}
+                    className="h-full w-full transition-transform duration-normal group-hover:scale-105"
+                  />
+                  <div className="absolute left-2xs top-2xs">
+                    <Badge tone={book.copies_available > 0 ? 'success' : 'danger'}>
+                      {book.copies_available > 0 ? `${book.copies_available} in` : 'On loan'}
+                    </Badge>
                   </div>
+                </div>
+                <div className="flex flex-1 flex-col p-sm">
+                  <h3 className="line-clamp-2 text-xs font-semibold text-on-surface group-hover:text-primary">
+                    {book.title}
+                  </h3>
+                  <p className="mt-3xs line-clamp-1 text-2xs text-on-surface-variant">{book.author}</p>
+                  {book.genre && (
+                    <p className="mt-auto pt-xs text-2xs text-on-surface-variant">{book.genre}</p>
+                  )}
                 </div>
               </Link>
             ))}
-          </section>
-        )}
-        {!loading && books.length === 0 && (
-          <div className="text-center py-16 text-on-surface-variant">
-            <span className="material-symbols-outlined text-5xl mb-4 block">search_off</span>
-            <p className="text-lg">No books found matching your criteria.</p>
           </div>
         )}
 
-        <div className="mt-6 bg-surface-container-lowest rounded-xl border border-surface-container-highest overflow-hidden">
-          <PaginationBar pagination={pagination} onPageChange={fetchBooks} />
-        </div>
+        {!loading && books.length > 0 && (
+          <div className="mt-lg overflow-hidden rounded-lg border border-surface-container-high bg-surface-container-lowest">
+            <PaginationBar pagination={pagination} onPageChange={fetchBooks} />
+          </div>
+        )}
       </main>
     </div>
   );

@@ -41,6 +41,70 @@
     --color-primary-fixed-dim: #79db8d;
     --color-on-primary-fixed-variant: #005323;
     --color-surface-variant: #dce5d9;
+
+    /* ── Status accents ──────────────────────────────────────────────
+       Previously spelled as one-off hex literals (#dcfce7, #166534,
+       #fee2e2, #991b1b) inline in a dozen components. Tokenised so
+       badges, toasts and alerts share one definition and can flip for
+       dark mode. */
+    --color-success: #166534;
+    --color-on-success: #ffffff;
+    --color-success-container: #dcfce7;
+    --color-on-success-container: #14532d;
+    --color-warning: #92400e;
+    --color-warning-container: #fef3c7;
+    --color-on-warning-container: #78350f;
+    --color-danger-container: #fee2e2;
+    --color-on-danger-container: #991b1b;
+
+    /* ── Radius scale ─────────────────────────────────────────────── */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* ── Elevation scale ──────────────────────────────────────────── */
+    --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.10), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+    --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+    --shadow-xl: 0 20px 24px -4px rgba(16, 24, 40, 0.10), 0 8px 8px -4px rgba(16, 24, 40, 0.04);
+
+    /* ── Spacing scale (4px base) ─────────────────────────────────── */
+    --space-3xs: 2px;
+    --space-2xs: 4px;
+    --space-xs: 8px;
+    --space-sm: 12px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-2xl: 48px;
+    --space-3xl: 64px;
+
+    /* ── Type scale (1.200 minor third, 16px base) ────────────────── */
+    --text-2xs: 0.694rem;
+    --text-xs: 0.833rem;
+    --text-sm: 0.9rem;
+    --text-base: 1rem;
+    --text-lg: 1.2rem;
+    --text-xl: 1.44rem;
+    --text-2xl: 1.728rem;
+    --text-3xl: 2.074rem;
+    --text-4xl: 2.488rem;
+    --text-5xl: 2.986rem;
+
+    --leading-tight: 1.15;
+    --leading-snug: 1.35;
+    --leading-normal: 1.55;
+
+    --tracking-wide: 0.06em;
+
+    /* ── Motion ───────────────────────────────────────────────────── */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 120ms;
+    --duration-normal: 220ms;
   }
 
   .dark {
@@ -81,6 +145,50 @@
     --color-primary-fixed-dim: #5fbf74;
     --color-on-primary-fixed-variant: #003918;
     --color-surface-variant: #414b40;
+
+    /* Status accents, re-tuned for dark surfaces */
+    --color-success: #4ade80;
+    --color-on-success: #052e16;
+    --color-success-container: #14532d;
+    --color-on-success-container: #bbf7d0;
+    --color-warning: #fbbf24;
+    --color-warning-container: #452c05;
+    --color-on-warning-container: #fde68a;
+    --color-danger-container: #4c1210;
+    --color-on-danger-container: #fecaca;
+
+    /* Elevation reads as depth of shadow on dark surfaces */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.30);
+    --shadow-lg: 0 12px 16px -4px rgba(0, 0, 0, 0.50), 0 4px 6px -2px rgba(0, 0, 0, 0.30);
+    --shadow-xl: 0 20px 24px -4px rgba(0, 0, 0, 0.55), 0 8px 8px -4px rgba(0, 0, 0, 0.35);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    line-height: var(--leading-normal);
+  }
+
+  /* A single visible focus treatment for every interactive element. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

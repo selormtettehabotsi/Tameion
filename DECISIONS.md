@@ -162,3 +162,18 @@ cannot fail is not coverage.
 **Audit-log writes are not asserted.** `auditFromReq` is deliberately
 fire-and-forget, so asserting on the row would be a race. Testing it properly
 needs a seam that does not exist yet; a flaky test would be worse than none.
+
+## Proxy trust
+
+**`trust proxy` is set to 1 (override with `TRUST_PROXY`).** Both compose files
+run nginx in front of Express. With the Express default (`false`),
+express-rate-limit keyed every proxied request on the *nginx container's* IP:
+all users shared one bucket, so a single client could exhaust the 10-request
+auth limit for the entire user base, and `req.ip` recorded the proxy rather
+than the caller in the audit log. It also emitted an
+`ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` validation error on every proxied request.
+
+Trusting exactly one hop fixes all three without letting a client spoof
+`X-Forwarded-For` (which `trust proxy: true` would allow). This only surfaced
+once a real browser exercised the app through nginx — curl straight to :5000
+never sets the header, which is why the earlier verification runs missed it.

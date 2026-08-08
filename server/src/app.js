@@ -13,8 +13,23 @@ const patronRoutes = require('./routes/patron');
 const booksRoutes = require('./routes/books');
 const adminRoutes = require('./routes/admin');
 
-function createApp({ enableRateLimit = true, enableCsrf = true } = {}) {
+function createApp({
+  enableRateLimit = true,
+  enableCsrf = true,
+  // Number of proxy hops to trust. Both compose files put nginx in front of
+  // this server, so the default is 1.
+  //
+  // This matters for correctness, not just tidiness: with the Express default
+  // (false) every request arriving through nginx keys on the nginx container's
+  // IP, so all users share a single rate-limit bucket — one client could
+  // exhaust the 10-request auth limit for everybody — and req.ip records the
+  // proxy rather than the caller in the audit log. Trusting exactly one hop
+  // fixes both without letting a client spoof X-Forwarded-For.
+  trustProxy = Number(process.env.TRUST_PROXY ?? 1),
+} = {}) {
   const app = express();
+
+  app.set('trust proxy', trustProxy);
 
   // Security headers
   app.use((req, res, next) => {

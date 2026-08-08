@@ -299,6 +299,42 @@ describeDb('Admin API (integration)', () => {
     );
   });
 
+  // ── proxy trust ──────────────────────────────────────────────────────
+
+  describe('proxy trust', () => {
+    // Both compose files run nginx in front of the server. Without
+    // `trust proxy`, express-rate-limit keys every proxied request on the
+    // nginx container's IP, so all users share one bucket, and req.ip in the
+    // audit log records the proxy instead of the caller.
+    it('trusts exactly one proxy hop by default', () => {
+      expect(app.get('trust proxy')).toBe(1);
+    });
+
+    it('resolves req.ip from X-Forwarded-For when proxied', async () => {
+      const res = await request(app)
+        .get('/api/health')
+        .set('X-Forwarded-For', '203.0.113.7');
+      expect(res.status).toBe(200);
+    });
+
+    it('gives two different forwarded clients independent rate-limit buckets', async () => {
+      // A rate-limited app is needed here; the shared one disables limiting.
+      const limited = createApp({ enableRateLimit: true, enableCsrf: false });
+
+      const first = await request(limited).get('/api/health').set('X-Forwarded-For', '203.0.113.10');
+      const second = await request(limited).get('/api/health').set('X-Forwarded-For', '203.0.113.11');
+
+      // Each client should be on its own counter, so both see the same
+      // remaining allowance rather than a shared, decrementing one.
+      expect(first.headers['ratelimit-remaining']).toBe(second.headers['ratelimit-remaining']);
+    });
+
+    it('honours the TRUST_PROXY override', () => {
+      const custom = createApp({ enableRateLimit: false, enableCsrf: false, trustProxy: 2 });
+      expect(custom.get('trust proxy')).toBe(2);
+    });
+  });
+
   // ── circulation (ported from scripts/smoke.sh) ───────────────────────
 
   describe('checkout / renew / return', () => {

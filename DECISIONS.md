@@ -59,6 +59,28 @@ stored URL is absent or fails to load.
 refinement rejects `javascript:`, `data:` and plain `http://`, so a stored
 attribute can never become an injection vector or mixed content.
 
+**Imagery is now bundled, not hotlinked.** The 28 photos were downloaded into
+`client/public/img/` and `images.ts` emits local paths. The app no longer
+depends on a third-party CDN at runtime, renders offline and in CI, and the
+audit is a filesystem check rather than 196 network requests.
+`client/public/img/SOURCES.md` records each file's Pexels id and stored size.
+Total cost: 1.3 MB, served from our own origin with a one-year immutable cache
+header.
+
+**Each photo is stored at one size and scaled with CSS.** The CDN could
+generate arbitrary dimensions on demand; local files cannot. Rather than ship
+seven variants of each photo, `IMAGE_SIZES` documents one canonical size per
+role and components pass `width`/`height` as intrinsic attributes so layout
+space is still reserved.
+
+**CSP `img-src` is `'self' data: https:`.** Bundled imagery is same-origin, so
+the Pexels host is gone. `https:` remains allowed because staff can attach
+publisher artwork from an arbitrary host through a book's `cover_url` — that is
+a real product feature, and the server already constrains it to absolute
+`https`. Narrowing to `'self'` would silently break it (the component would
+fall back to the local photo on error). `http:` stays blocked, so mixed content
+is still impossible.
+
 ## Database
 
 **Added `books.cover_url` and `members.avatar_url`** (both `varchar(500)`,
@@ -117,3 +139,26 @@ has no `unsafe-inline` and no `unsafe-eval`.
 
 **A 401 in the browser console on first load is expected.** `AuthContext` probes
 `/auth/me`, which correctly returns 401 for anonymous visitors.
+
+## Testing
+
+**`scripts/smoke.sh` is kept alongside the Jest suite, not replaced by it.**
+The Jest tests are what CI enforces; the smoke script still earns its place as
+a check against the *running Docker stack* (real nginx, real CSP headers, real
+proxying), which supertest cannot cover because it drives the Express app
+in-process.
+
+**CSRF is tested in its own file.** Every other suite builds the app with
+`enableCsrf: false`; `tests/integration/csrf.test.js` is the one place that
+turns it on, so the double-submit flow and the four exempt paths are actually
+exercised rather than assumed.
+
+**Every new test was negative-controlled.** Because the same author wrote the
+feature and its test, each was verified to fail when the feature is broken:
+removing the `activeMembers` filter failed 3 tests, dropping the `https`
+refinement failed 21, and making `csrfProtect` a no-op failed 5. A test that
+cannot fail is not coverage.
+
+**Audit-log writes are not asserted.** `auditFromReq` is deliberately
+fire-and-forget, so asserting on the row would be a race. Testing it properly
+needs a seam that does not exist yet; a flaky test would be worse than none.

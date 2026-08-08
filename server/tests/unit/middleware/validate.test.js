@@ -1,4 +1,7 @@
-const { validate, registerSchema, bookSchema, checkoutSchema } = require('../../../src/middleware/validate');
+const {
+  validate, registerSchema, bookSchema, bookUpdateSchema,
+  memberUpdateSchema, checkoutSchema,
+} = require('../../../src/middleware/validate');
 
 function runValidate(schema, body) {
   const req = { body };
@@ -83,6 +86,126 @@ describe('validate middleware', () => {
         ...validBook, publisher: 'Pub', genre: 'Fiction', copies_total: 5,
       });
       expect(next).toHaveBeenCalled();
+    });
+  });
+
+  // Image URLs are rendered straight into <img src>, so the shared httpsUrl
+  // refinement must keep script-bearing and mixed-content schemes out of the
+  // database. These run against every schema that accepts an image URL.
+  describe('image URL validation', () => {
+    const REJECTED = [
+      ['javascript:', 'javascript:alert(1)'],
+      ['javascript: with newline', 'java\nscript:alert(1)'],
+      ['data: image', 'data:image/svg+xml;base64,PHN2Zy8+'],
+      ['data: html', 'data:text/html,<script>alert(1)</script>'],
+      ['http (mixed content)', 'http://example.com/cover.jpg'],
+      ['protocol-relative', '//example.com/cover.jpg'],
+      ['relative path', '/img/cover.jpg'],
+      ['vbscript:', 'vbscript:msgbox(1)'],
+      ['file:', 'file:///etc/passwd'],
+      ['not a url', 'definitely not a url'],
+    ];
+
+    const ACCEPTED = [
+      ['https', 'https://images.example.org/cover.jpg'],
+      ['https with query', 'https://images.example.org/c.jpg?w=400&h=600'],
+      ['https with port', 'https://images.example.org:8443/cover.jpg'],
+    ];
+
+    describe('bookSchema.cover_url', () => {
+      const book = { isbn: '978-1', title: 'T', author: 'A' };
+
+      it.each(REJECTED)('rejects %s', (_label, value) => {
+        const { next, res } = runValidate(bookSchema, { ...book, cover_url: value });
+        expect(next).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+
+      it.each(ACCEPTED)('accepts %s', (_label, value) => {
+        const { next, res } = runValidate(bookSchema, { ...book, cover_url: value });
+        expect(res.status).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalled();
+      });
+
+      it('accepts an omitted cover_url', () => {
+        const { next } = runValidate(bookSchema, book);
+        expect(next).toHaveBeenCalled();
+      });
+
+      it('accepts an explicit null cover_url', () => {
+        const { next } = runValidate(bookSchema, { ...book, cover_url: null });
+        expect(next).toHaveBeenCalled();
+      });
+
+      it('rejects a cover_url longer than 500 characters', () => {
+        const long = 'https://example.org/' + 'a'.repeat(500) + '.jpg';
+        const { res } = runValidate(bookSchema, { ...book, cover_url: long });
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+    });
+
+    describe('bookUpdateSchema.cover_url', () => {
+      it.each(REJECTED)('rejects %s', (_label, value) => {
+        const { next, res } = runValidate(bookUpdateSchema, { cover_url: value });
+        expect(next).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+
+      it('accepts an https cover_url on its own', () => {
+        const { next } = runValidate(bookUpdateSchema, { cover_url: 'https://a.example/b.jpg' });
+        expect(next).toHaveBeenCalled();
+      });
+
+      it('does not require isbn', () => {
+        const { next } = runValidate(bookUpdateSchema, { title: 'New title' });
+        expect(next).toHaveBeenCalled();
+      });
+    });
+
+    describe('memberUpdateSchema.avatar_url', () => {
+      it.each(REJECTED)('rejects %s', (_label, value) => {
+        const { next, res } = runValidate(memberUpdateSchema, { avatar_url: value });
+        expect(next).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+
+      it.each(ACCEPTED)('accepts %s', (_label, value) => {
+        const { next, res } = runValidate(memberUpdateSchema, { avatar_url: value });
+        expect(res.status).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('memberUpdateSchema', () => {
+    it('accepts the statuses the admin UI offers', () => {
+      for (const account_status of ['active', 'suspended']) {
+        const { next } = runValidate(memberUpdateSchema, { account_status });
+        expect(next).toHaveBeenCalled();
+      }
+    });
+
+    it('rejects a status the UI must not offer', () => {
+      const { res } = runValidate(memberUpdateSchema, { account_status: 'inactive' });
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('accepts all three member types', () => {
+      for (const user_type of ['student', 'postgraduate', 'faculty']) {
+        const { next } = runValidate(memberUpdateSchema, { user_type });
+        expect(next).toHaveBeenCalled();
+      }
+    });
+
+    it('rejects an unknown member type', () => {
+      const { res } = runValidate(memberUpdateSchema, { user_type: 'alumnus' });
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('strips unknown fields so account_status cannot be smuggled in', () => {
+      const { req, next } = runValidate(memberUpdateSchema, { full_name: 'A', password_hash: 'x' });
+      expect(next).toHaveBeenCalled();
+      expect(req.body.password_hash).toBeUndefined();
     });
   });
 

@@ -98,7 +98,11 @@ Shared UI lives in `components/ui/` (`Button`, `Input`, `Select`, `Badge`, `Card
 
 ### Imagery
 
-All photography comes from `src/lib/images.ts`, which is served from the Pexels CDN and constrained by the CSP's `img-src`. Covers and avatars are picked by a hash of the ISBN / KNUST id so they stay stable per record. **Any photo id added there must be verified with `npm run verify:images` before committing**, and any new image host must be added to the CSP in both `client/index.html` and `client/nginx.conf`.
+All photography is **bundled**, not hotlinked: the files live in `client/public/img/` and every path is emitted by `src/lib/images.ts`. Covers and avatars are picked by an FNV-1a hash of the ISBN / KNUST id so they stay stable per record. Each photo is stored at one canonical size (`IMAGE_SIZES`) and scaled with CSS, so the helpers take no dimensions — pass `width`/`height` to the `<img>` as intrinsic attributes to reserve layout space.
+
+`npm run verify:images` is an offline filesystem check: it asserts every referenced file exists, is non-empty, and starts with the JPEG magic bytes, and warns about unreferenced files. **Adding a photo means adding the file, referencing it in `images.ts`, recording its Pexels id in `client/public/img/SOURCES.md`, and running the audit.**
+
+The CSP allows `img-src 'self' data: https:` — bundled imagery is same-origin, and `https:` is permitted because staff can attach publisher artwork from any host via a book's `cover_url` (the server validates it as absolute `https`). Plain `http:` stays blocked, so the page cannot load mixed content.
 
 ## Seeded test accounts
 

@@ -13,6 +13,11 @@
       attributes for the progress bars, and Vite injects the stylesheet. There
       is no 'unsafe-inline' or 'unsafe-eval' for scripts.
 
+      All bundled imagery is local ('self'). img-src also allows https: because
+      staff can attach publisher artwork from an arbitrary host via a book's
+      cover_url, which the server validates as absolute https. Plain http: is
+      still blocked, so the page can never load mixed content.
+
       frame-ancestors is deliberately absent here — browsers ignore it in a
       meta tag. It is sent as a real header from nginx.conf instead.
     -->
@@ -23,7 +28,7 @@
         script-src 'self';
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
-        img-src 'self' data: https://images.pexels.com;
+        img-src 'self' data: https:;
         connect-src 'self';
         object-src 'none';
         base-uri 'self';

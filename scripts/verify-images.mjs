@@ -1,100 +1,105 @@
 #!/usr/bin/env node
 /**
- * Image audit: proves every photo the client can render actually resolves.
+ * Image audit: proves every photo the client can render actually exists.
  *
- * Extracts every Pexels photo id from client/src/lib/images.ts and requests it
- * at every size the app renders. That is a superset of the URLs the module
- * emits, so a green run means there are no broken images anywhere in the UI.
+ * Imagery is bundled in client/public/img, so this is an offline, filesystem
+ * check — no network, deterministic, and safe to run in CI.
+ *
+ * For each path emitted by client/src/lib/images.ts it asserts the file:
+ *   - exists under client/public
+ *   - is non-empty
+ *   - starts with the JPEG magic bytes (FF D8 FF), so a truncated or
+ *     HTML-error-page download cannot pass as an image
+ *
+ * It also reports any file in client/public/img that nothing references, so
+ * dead weight does not accumulate in the bundle.
  *
  * Usage: node scripts/verify-images.mjs
- * Exit code 0 = all 200, 1 = at least one non-200.
+ * Exit code 0 = all good, 1 = at least one problem.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, '..', 'client', 'src', 'lib', 'images.ts');
-
-// Every (width, height) pair the components request.
-const SIZES = [
-  [1600, 900],   // hero
-  [1200, 1600],  // auth split panel
-  [400, 600],    // book cover
-  [200, 300],    // book cover, compact
-  [160, 160],    // avatar
-  [40, 40],      // avatar, inline
-  [600, 400],    // empty state
-];
-
-const CONCURRENCY = 5;
-const RETRIES = 3;
+const root = join(here, '..');
+const source = join(root, 'client', 'src', 'lib', 'images.ts');
+const publicDir = join(root, 'client', 'public');
+const imgDir = join(publicDir, 'img');
 
 /**
- * Fetch a URL, retrying transport errors with backoff.
+ * Pull the referenced paths straight out of images.ts.
  *
- * Without this, a dropped connection under concurrency reports as a failure
- * even though the image is fine. Only transport errors are retried — an HTTP
- * status (including 404) is returned immediately, so a genuinely broken URL
- * still fails the audit.
+ * The module builds every URL as `${IMG}/<file>` with IMG = '/img', plus the
+ * two single-purpose constants, so matching the quoted filenames and the two
+ * literal paths covers everything allImageUrls() can return.
  */
-async function check(url) {
-  let lastErr;
-  for (let attempt = 1; attempt <= RETRIES; attempt++) {
-    try {
-      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-      return res.status;
-    } catch (err) {
-      lastErr = err;
-      if (attempt < RETRIES) {
-        await new Promise((r) => setTimeout(r, 400 * attempt));
-      }
-    }
+function referencedFiles(text) {
+  const files = new Set();
+  for (const m of text.matchAll(/'(?:\$\{IMG\}\/)?((?:hero|auth|cover-|avatar-|empty-)[a-z0-9-]*\.jpg)'/gi)) {
+    files.add(m[1]);
   }
-  return `ERR ${lastErr?.message ?? 'unknown'}`;
+  for (const m of text.matchAll(/`\$\{IMG\}\/(\w[\w-]*\.jpg)`/g)) {
+    files.add(m[1]);
+  }
+  return [...files];
 }
 
 async function main() {
   const text = await readFile(source, 'utf8');
-  const ids = [...new Set(text.match(/'(\d{6,9})'/g)?.map((m) => m.slice(1, -1)) ?? [])];
+  const files = referencedFiles(text);
 
-  if (ids.length === 0) {
-    console.error('No photo ids found in', source);
+  if (files.length === 0) {
+    console.error(`No image filenames found in ${source}`);
     process.exit(1);
   }
 
-  const urls = ids.flatMap((id) =>
-    SIZES.map(([w, h]) =>
-      `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg` +
-      `?auto=compress&cs=tinysrgb&fit=crop&w=${w}&h=${h}`
-    )
-  );
+  console.log(`Verifying ${files.length} bundled images against ${imgDir}...`);
 
-  console.log(`Verifying ${urls.length} URLs (${ids.length} photos x ${SIZES.length} sizes)...`);
-
-  const failures = [];
-  let done = 0;
-  const queue = [...urls];
-
-  async function worker() {
-    for (;;) {
-      const url = queue.shift();
-      if (!url) return;
-      const status = await check(url);
-      done++;
-      if (status !== 200) failures.push({ url, status });
+  const problems = [];
+  for (const file of files) {
+    const path = join(imgDir, file);
+    try {
+      const info = await stat(path);
+      if (!info.isFile()) {
+        problems.push(`${file}: not a regular file`);
+        continue;
+      }
+      if (info.size === 0) {
+        problems.push(`${file}: empty file`);
+        continue;
+      }
+      const head = (await readFile(path)).subarray(0, 3);
+      if (!(head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff)) {
+        problems.push(`${file}: not a JPEG (bad magic bytes)`);
+      }
+    } catch {
+      problems.push(`${file}: MISSING from client/public/img`);
     }
   }
 
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  // Anything on disk that images.ts never references.
+  let orphans = [];
+  try {
+    const onDisk = (await readdir(imgDir)).filter((f) => f.toLowerCase().endsWith('.jpg'));
+    orphans = onDisk.filter((f) => !files.includes(f));
+  } catch {
+    problems.push(`${imgDir} is not readable`);
+  }
 
-  console.log(`Checked ${done}. OK: ${done - failures.length}. Failed: ${failures.length}.`);
-  if (failures.length) {
-    for (const f of failures) console.error(`  ${f.status}  ${f.url}`);
+  console.log(`Checked ${files.length}. OK: ${files.length - problems.length}. Failed: ${problems.length}.`);
+
+  if (orphans.length) {
+    console.warn(`Unreferenced files in client/public/img: ${orphans.join(', ')}`);
+  }
+
+  if (problems.length) {
+    for (const p of problems) console.error(`  ${p}`);
     process.exit(1);
   }
-  console.log('All images returned HTTP 200.');
+
+  console.log('All bundled images present and valid.');
 }
 
 main();

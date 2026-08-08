@@ -23,7 +23,7 @@ function initials(name: string) {
 
 export default function Avatar({ seed, name, src, size = 40, className = '' }: Props) {
   const [failed, setFailed] = useState(false);
-  const url = src || avatarFor(seed, size * 2);
+  const url = src || avatarFor(seed);
 
   return (
     <span

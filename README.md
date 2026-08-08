@@ -143,8 +143,11 @@ With the stack running (`docker compose up -d`):
 ```bash
 bash scripts/smoke.sh          # every route's status, CSRF flow, role guards
 bash scripts/diff-schema.sh    # proves schema.sql and the migration match
-npm run verify:images          # every image URL returns HTTP 200
+npm run verify:images          # bundled images exist on disk and are valid JPEGs
 ```
+
+`verify:images` needs no network and no running stack — imagery is bundled in
+`client/public/img` (see `SOURCES.md` there for provenance).
 
 `diff-schema.sh` applies each schema definition to a throwaway database and
 diffs the resulting catalogs, because `server/src/db/schema.sql` and

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { emptyStateImage, type EmptyStateKind } from '../lib/images';
+import { emptyStateImage, IMAGE_SIZES, type EmptyStateKind } from '../lib/images';
 
 interface Props {
   kind: EmptyStateKind;
@@ -15,8 +15,8 @@ export default function EmptyState({ kind, title, description, action, className
       <img
         src={emptyStateImage(kind)}
         alt=""
-        width={600}
-        height={400}
+        width={IMAGE_SIZES.empty.width}
+        height={IMAGE_SIZES.empty.height}
         loading="lazy"
         decoding="async"
         className="mb-lg h-32 w-full max-w-[260px] rounded-md object-cover opacity-90 sm:h-40"

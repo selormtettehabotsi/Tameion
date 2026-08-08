@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { coverFallback } from '../lib/images';
+import { coverFallback, IMAGE_SIZES } from '../lib/images';
 
 interface Props {
   isbn: string;
   title: string;
   /** Publisher artwork stored on the book record, if any. */
   coverUrl?: string | null;
+  /** Intrinsic <img> dimensions, used to reserve layout space. */
   width?: number;
   height?: number;
   className?: string;
@@ -21,11 +22,11 @@ export default function BookCover({
   isbn,
   title,
   coverUrl,
-  width = 400,
-  height = 600,
+  width = IMAGE_SIZES.cover.width,
+  height = IMAGE_SIZES.cover.height,
   className = '',
 }: Props) {
-  const fallback = coverFallback(isbn, width, height);
+  const fallback = coverFallback(isbn);
   const [src, setSrc] = useState(coverUrl || fallback);
   const [loaded, setLoaded] = useState(false);
 

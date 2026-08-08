@@ -1,133 +1,163 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import type { AdminDashboardData } from '../../types';
+import StatCard from '../../components/StatCard';
+import EmptyState from '../../components/EmptyState';
+import Icon from '../../components/Icon';
+import { Alert, Badge, Button, Card, CardHeader, loanTone } from '../../components/ui';
 
 export default function AdminDashboard() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api.adminDashboard().then(r => setData(r.data)).catch(console.error).finally(() => setLoading(false));
+    api.adminDashboard()
+      .then(r => setData(r.data))
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-on-surface-variant">Loading...</p>;
-  if (!data) return <p className="text-error">Failed to load dashboard.</p>;
+  if (failed) {
+    return <Alert tone="danger" title="Could not load the dashboard">Refresh the page to try again.</Alert>;
+  }
 
-  const card = 'bg-surface-container-lowest border border-surface-container-high rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex flex-col justify-between';
+  const overdue = data?.overdueLoans ?? 0;
+  const maxBranch = Math.max(1, ...(data?.booksByBranch ?? []).map(b => Number(b.book_count)));
 
   return (
     <div>
-      <header className="mb-8">
-        <h1 className="font-semibold text-2xl md:text-3xl text-on-surface">Library Overview</h1>
-        <p className="text-sm text-on-surface-variant mt-1">High-level metrics and recent activities across all branches.</p>
+      <header className="mb-lg">
+        <p className="text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Overview</p>
+        <h1 className="mt-3xs text-2xl font-bold text-on-surface md:text-3xl">Library at a glance</h1>
+        <p className="mt-2xs text-sm text-on-surface-variant">
+          Live circulation, catalogue and membership figures across every branch.
+        </p>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className={card}>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs tracking-wider font-medium text-on-surface-variant">Total Members</span>
-            <div className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-[20px]">group</span>
-            </div>
-          </div>
-          <div className="font-bold text-4xl text-on-surface">{data.totalMembers.toLocaleString()}</div>
+      {overdue > 0 && (
+        <div className="mb-lg">
+          <Alert
+            tone="danger"
+            title={`${overdue} overdue ${overdue === 1 ? 'loan needs' : 'loans need'} chasing`}
+            action={
+              <Link to="/admin/loans" className="shrink-0">
+                <Button variant="secondary" size="sm">Open loans desk</Button>
+              </Link>
+            }
+          >
+            Overdue items continue to accrue fines at GH₵ 1.00 per day.
+          </Alert>
         </div>
-        <div className={card}>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs tracking-wider font-medium text-on-surface-variant">Total Catalog</span>
-            <div className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center text-secondary">
-              <span className="material-symbols-outlined text-[20px]">library_books</span>
-            </div>
-          </div>
-          <div className="flex items-end gap-4">
-            <div>
-              <div className="font-bold text-4xl text-on-surface">{data.totalBooks.toLocaleString()}</div>
-              <div className="text-xs tracking-wider font-medium text-on-surface-variant mt-1">Books</div>
-            </div>
-            <div className="pb-1">
-              <div className="font-semibold text-xl text-on-surface-variant">{data.totalCopies.toLocaleString()}</div>
-              <div className="text-xs tracking-wider font-medium text-outline mt-1">Copies</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-error-container border border-error/20 rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs tracking-wider font-medium text-on-error-container">Overdue Loans</span>
-            <div className="w-8 h-8 rounded-full bg-surface-container-lowest/50 flex items-center justify-center text-error">
-              <span className="material-symbols-outlined text-[20px]">warning</span>
-            </div>
-          </div>
-          <div className="font-bold text-4xl text-error">{data.overdueLoans}</div>
-          {data.overdueLoans > 0 && <div className="mt-2 text-xs tracking-wider font-medium text-on-error-container">Requires immediate action</div>}
-        </div>
-        <div className={card}>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs tracking-wider font-medium text-on-surface-variant">Outstanding Fines</span>
-            <div className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center text-tertiary">
-              <span className="material-symbols-outlined text-[20px]">payments</span>
-            </div>
-          </div>
-          <div className="font-bold text-4xl text-on-surface">GH₵ {Number(data.totalFinesOutstanding).toFixed(0)}</div>
-        </div>
+      )}
+
+      <section className="mb-lg grid grid-cols-1 gap-md sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total books" value={loading ? 0 : data!.totalBooks.toLocaleString()} icon="book-open" loading={loading}
+          hint={data ? `${data.totalCopies.toLocaleString()} copies on shelf` : undefined} />
+        <StatCard label="Borrowed now" value={loading ? 0 : data!.activeLoans.toLocaleString()} icon="calendar" tone="info" loading={loading}
+          hint={data ? `${data.pendingReservations} holds pending` : undefined} />
+        <StatCard label="Overdue" value={overdue} icon="triangle-alert" tone={overdue > 0 ? 'danger' : 'success'} loading={loading}
+          hint={overdue > 0 ? 'Requires action' : 'All clear'} />
+        <StatCard label="Active members" value={loading ? 0 : data!.activeMembers.toLocaleString()} icon="users" tone="success" loading={loading}
+          hint={data ? `${data.totalMembers.toLocaleString()} registered` : undefined} />
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <section className="lg:col-span-1">
-          <div className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-            <h3 className="font-semibold text-xl text-on-surface mb-4">Books by Branch</h3>
-            <ul className="space-y-2 text-xs tracking-wider font-medium text-on-surface-variant">
-              {data.booksByBranch.map((b, i) => {
-                const max = Math.max(...data.booksByBranch.map(x => Number(x.book_count)));
-                const pct = max > 0 ? (Number(b.book_count) / max) * 100 : 0;
-                return (
-                  <li key={i} className="space-y-1">
-                    <div className="flex justify-between"><span>{b.branch_name}</span><span>{b.book_count} books</span></div>
-                    <div className="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: pct + '%' }} />
+      <div className="grid grid-cols-1 gap-lg lg:grid-cols-3">
+        <section className="space-y-lg">
+          <Card>
+            <h3 className="mb-md text-base font-semibold text-on-surface">Outstanding fines</h3>
+            <p className="text-3xl font-bold text-on-surface">
+              GH₵ {loading ? '—' : Number(data!.totalFinesOutstanding).toFixed(2)}
+            </p>
+            <Link to="/admin/fines" className="mt-md inline-block">
+              <Button variant="ghost" size="sm">
+                Manage fines<Icon name="arrow-right" size={14} />
+              </Button>
+            </Link>
+          </Card>
+
+          <Card>
+            <h3 className="mb-md text-base font-semibold text-on-surface">Books by branch</h3>
+            {loading ? (
+              <div className="space-y-sm">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="h-8 animate-pulse rounded-sm bg-surface-container-high" />
+                ))}
+              </div>
+            ) : data!.booksByBranch.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">No branches configured yet.</p>
+            ) : (
+              <ul className="space-y-sm">
+                {data!.booksByBranch.map((b, i) => (
+                  <li key={i} className="space-y-2xs">
+                    <div className="flex justify-between text-xs">
+                      <span className="truncate font-semibold text-on-surface">{b.branch_name}</span>
+                      <span className="shrink-0 text-on-surface-variant">{b.book_count} titles</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-normal"
+                        style={{ width: `${(Number(b.book_count) / maxBranch) * 100}%` }}
+                      />
                     </div>
                   </li>
-                );
-              })}
-            </ul>
-          </div>
+                ))}
+              </ul>
+            )}
+          </Card>
         </section>
 
-        <section className="lg:col-span-2 bg-surface-container-lowest border border-surface-container-high rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-surface-container-high flex justify-between items-center bg-surface-bright">
-            <h3 className="font-semibold text-xl text-on-surface">Recent Loan Activity</h3>
-          </div>
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-xs tracking-wider font-medium text-on-surface-variant border-b border-surface-container-high">
-                  <th className="p-4 font-medium">Patron</th>
-                  <th className="p-4 font-medium">KNUST ID</th>
-                  <th className="p-4 font-medium">Book Title</th>
-                  <th className="p-4 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm text-on-surface">
-                {data.recentLoans.map(loan => (
-                  <tr key={loan.id} className="border-b border-surface-container-low hover:bg-surface-bright transition-colors">
-                    <td className="p-4 font-medium">{loan.member_name}</td>
-                    <td className="p-4 text-on-surface-variant font-mono text-sm">{loan.knust_id}</td>
-                    <td className="p-4">{loan.title}</td>
-                    <td className="p-4">
-                      <span className={'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ' +
-                        (loan.status === 'overdue' ? 'bg-error-container text-error' :
-                         loan.status === 'returned' ? 'bg-tertiary-fixed text-on-tertiary-fixed' :
-                         'bg-surface-container-high text-on-surface-variant')}>
-                        <span className={'w-2 h-2 rounded-full mr-2 ' +
-                          (loan.status === 'overdue' ? 'bg-error' : loan.status === 'returned' ? 'bg-tertiary' : 'bg-secondary')} />
-                        {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
-                      </span>
-                    </td>
-                  </tr>
+        <section className="lg:col-span-2">
+          <Card flush>
+            <CardHeader
+              title="Recent circulation"
+              description="The last ten checkouts"
+              action={
+                <Link to="/admin/loans">
+                  <Button variant="ghost" size="sm">
+                    All loans<Icon name="arrow-right" size={14} />
+                  </Button>
+                </Link>
+              }
+            />
+            {loading ? (
+              <div className="space-y-xs p-md">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-high" />
                 ))}
-              </tbody>
-            </table>
-            {data.recentLoans.length === 0 && <p className="p-6 text-sm text-on-surface-variant text-center">No recent activity.</p>}
-          </div>
+              </div>
+            ) : data!.recentLoans.length === 0 ? (
+              <EmptyState kind="loans" title="No circulation yet" description="Checkouts will appear here as they happen." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-surface-container-high bg-surface-container-low">
+                      <th scope="col" className="p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Patron</th>
+                      <th scope="col" className="hidden p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant sm:table-cell">KNUST ID</th>
+                      <th scope="col" className="p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Title</th>
+                      <th scope="col" className="p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-container-high text-sm">
+                    {data!.recentLoans.map(loan => (
+                      <tr key={loan.id} className="transition-colors duration-fast hover:bg-surface-bright">
+                        <td className="p-sm font-semibold text-on-surface">{loan.member_name}</td>
+                        <td className="hidden p-sm font-mono text-2xs text-on-surface-variant sm:table-cell">{loan.knust_id}</td>
+                        <td className="p-sm text-xs text-on-surface">{loan.title}</td>
+                        <td className="p-sm">
+                          <Badge tone={loanTone(loan.status)}>
+                            {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </section>
       </div>
     </div>

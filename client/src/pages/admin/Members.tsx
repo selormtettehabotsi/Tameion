@@ -2,142 +2,215 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 import type { Member, Pagination } from '../../types';
 import PaginationBar from '../../components/PaginationBar';
+import EmptyState from '../../components/EmptyState';
+import Modal from '../../components/Modal';
+import Avatar from '../../components/Avatar';
+import Icon from '../../components/Icon';
 import { useToast } from '../../context/ToastContext';
+import { Alert, Badge, Button, Card, Input, Select } from '../../components/ui';
+
+const STATUS_FILTERS = [
+  { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+];
+
+// Mirrors memberUpdateSchema on the server — keep the two in step.
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+];
+
+const TYPE_OPTIONS = [
+  { value: 'student', label: 'Student' },
+  { value: 'postgraduate', label: 'Postgraduate' },
+  { value: 'faculty', label: 'Faculty' },
+];
 
 export default function Members() {
   const [members, setMembers] = useState<Member[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
   const [editing, setEditing] = useState<Member | null>(null);
-  const [form, setForm] = useState({ account_status: '', user_type: '' });
+  const [form, setForm] = useState({ account_status: 'active', user_type: 'student' });
   const [saving, setSaving] = useState(false);
+  const [modalErr, setModalErr] = useState('');
   const { toast } = useToast();
+
+  const load = (page = 1) => {
+    setLoading(true);
+    const params: Record<string, string> = { page: String(page), limit: '20' };
+    if (q) params.q = q;
+    if (status) params.status = status;
+    api.adminMembers(params)
+      .then(r => { setMembers(r.data.members); setPagination(r.data.pagination); })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
 
   const handleExport = async () => {
     try {
       const blob = await api.adminExportMembers();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'members.csv'; a.click();
+      a.href = url;
+      a.download = 'members.csv';
+      a.click();
       URL.revokeObjectURL(url);
-    } catch { toast('Export failed', 'error'); }
+      toast('Members exported', 'success');
+    } catch {
+      toast('Export failed', 'error');
+    }
   };
 
-  const load = (page = 1) => {
-    setLoading(true);
-    const params: Record<string, string> = { page: String(page), limit: '20' };
-    if (q) params.q = q;
-    api.adminMembers(params)
-      .then(r => { setMembers(r.data.members); setPagination(r.data.pagination); })
-      .catch(console.error).finally(() => setLoading(false));
+  const openEdit = (m: Member) => {
+    setEditing(m);
+    setModalErr('');
+    setForm({ account_status: m.account_status, user_type: m.user_type });
   };
-  useEffect(() => { load(); }, []);
 
-  const handleSearch = (e: FormEvent) => { e.preventDefault(); load(1); };
-  const openEdit = (m: Member) => { setEditing(m); setForm({ account_status: m.account_status, user_type: m.user_type }); };
   const handleSave = async (e: FormEvent) => {
-    e.preventDefault(); if (!editing) return; setSaving(true);
-    try { await api.adminUpdateMember(editing.id, form); setEditing(null); load(pagination.page); }
-    catch (e) { console.error(e); } finally { setSaving(false); }
+    e.preventDefault();
+    if (!editing) return;
+    setSaving(true);
+    setModalErr('');
+    try {
+      await api.adminUpdateMember(editing.id, form);
+      setEditing(null);
+      toast('Member updated', 'success');
+      load(pagination.page);
+    } catch (err) {
+      setModalErr(err instanceof Object && 'message' in err ? String(err.message) : 'Update failed');
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const inp = 'w-full px-3 py-2 bg-surface-container-lowest rounded-md border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm text-on-surface';
 
   return (
     <div>
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+      <header className="mb-lg flex flex-col justify-between gap-md sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs tracking-wider font-medium text-on-surface-variant uppercase mb-1">User Management</p>
-          <h1 className="font-semibold text-2xl md:text-3xl text-on-surface">Members</h1>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">User management</p>
+          <h1 className="mt-3xs text-2xl font-bold text-on-surface md:text-3xl">Members</h1>
+          <p className="mt-2xs text-sm text-on-surface-variant">
+            {loading ? 'Loading…' : `${pagination.total} registered ${pagination.total === 1 ? 'patron' : 'patrons'}`}
+          </p>
         </div>
-        <button onClick={handleExport} className="bg-surface border border-outline-variant hover:bg-surface-container-low text-on-surface font-medium text-sm px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
-          <span className="material-symbols-outlined text-[20px]">download</span> Export CSV
-        </button>
+        <Button variant="secondary" size="lg" onClick={handleExport}>
+          <Icon name="download" size={18} />
+          Export CSV
+        </Button>
       </header>
 
-      <form onSubmit={handleSearch} className="flex gap-3 mb-6 bg-surface-container-lowest p-4 rounded-lg border border-surface-container-highest shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-        <div className="relative flex-1">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
-          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name, KNUST ID, or email..." className={inp + ' pl-10'} />
+      <form
+        onSubmit={(e) => { e.preventDefault(); load(1); }}
+        className="mb-lg flex flex-col gap-sm rounded-lg border border-surface-container-high bg-surface-container-lowest p-md shadow-sm sm:flex-row sm:items-end"
+      >
+        <div className="flex-1">
+          <Input label="Search" icon="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Name, KNUST ID or email" />
         </div>
-        <button type="submit" className="px-4 py-2 bg-primary text-on-primary rounded-md text-sm font-medium hover:bg-primary-container hover:text-on-primary-container transition-colors">Search</button>
+        <div className="sm:w-48">
+          <Select label="Status" value={status} onChange={e => setStatus(e.target.value)} options={STATUS_FILTERS} />
+        </div>
+        <Button type="submit">
+          <Icon name="search" size={16} />
+          Search
+        </Button>
       </form>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-surface-container-highest overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-bright border-b border-surface-container-highest">
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase">KNUST ID</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase">Name</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase hidden md:table-cell">Email</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase hidden lg:table-cell">Type</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase text-center">Status</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase text-right">Fine</th>
-                <th className="py-3 px-4 text-xs tracking-wider font-medium text-on-surface-variant uppercase text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container-highest text-sm">
-              {loading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-on-surface-variant">Loading...</td></tr>
-              ) : members.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-on-surface-variant">No members found.</td></tr>
-              ) : members.map(m => (
-                <tr key={m.id} className="hover:bg-surface transition-colors group">
-                  <td className="py-3 px-4 font-mono text-xs text-on-surface-variant">{m.knust_id}</td>
-                  <td className="py-3 px-4 font-medium text-on-surface">{m.full_name}</td>
-                  <td className="py-3 px-4 text-on-surface-variant hidden md:table-cell">{m.email}</td>
-                  <td className="py-3 px-4 text-on-surface hidden lg:table-cell capitalize">{m.user_type}</td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ' +
-                      (m.account_status === 'active' ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#fee2e2] text-[#991b1b]')}>
-                      {m.account_status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right text-on-surface-variant">GH₵ {Number(m.fine_balance).toFixed(2)}</td>
-                  <td className="py-3 px-4 text-right">
-                    <button onClick={() => openEdit(m)} className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Edit">
-                      <span className="material-symbols-outlined text-[20px]">edit</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <PaginationBar pagination={pagination} onPageChange={load} />
-      </div>
-
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm">
-          <div className="bg-surface-container-lowest w-full max-w-md rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.1)] border border-surface-container-highest overflow-hidden">
-            <div className="px-6 py-4 border-b border-surface-container-highest bg-surface-bright flex justify-between items-center">
-              <h3 className="font-semibold text-xl text-on-surface">Edit Member</h3>
-              <button onClick={() => setEditing(null)} className="text-on-surface-variant hover:text-on-surface"><span className="material-symbols-outlined">close</span></button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="text-sm text-on-surface-variant"><strong>{editing.full_name}</strong> ({editing.knust_id})</div>
-              <div>
-                <label className="text-xs tracking-wider font-medium text-on-surface-variant mb-1 block">Account Status</label>
-                <select value={form.account_status} onChange={e => setForm({ ...form, account_status: e.target.value })} className={inp}>
-                  <option value="active">Active</option><option value="suspended">Suspended</option><option value="inactive">Inactive</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs tracking-wider font-medium text-on-surface-variant mb-1 block">User Type</label>
-                <select value={form.user_type} onChange={e => setForm({ ...form, user_type: e.target.value })} className={inp}>
-                  <option value="student">Student</option><option value="faculty">Faculty</option>
-                </select>
-              </div>
-            </form>
-            <div className="px-6 py-4 border-t border-surface-container-highest bg-surface-bright flex justify-end gap-3">
-              <button onClick={() => setEditing(null)} className="px-4 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-md transition-colors font-medium">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-primary text-on-primary rounded-md font-medium hover:bg-primary-container hover:text-on-primary-container transition-colors disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
-            </div>
+      <Card flush>
+        {loading ? (
+          <div className="space-y-xs p-md">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-12 animate-pulse rounded-sm bg-surface-container-high" />
+            ))}
           </div>
-        </div>
-      )}
+        ) : members.length === 0 ? (
+          <EmptyState kind="members" title="No members found" description="Try a different search term or clear the status filter." />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-surface-container-high bg-surface-container-low">
+                    <th scope="col" className="p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Member</th>
+                    <th scope="col" className="hidden p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant md:table-cell">Email</th>
+                    <th scope="col" className="hidden p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant lg:table-cell">Type</th>
+                    <th scope="col" className="p-sm text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Status</th>
+                    <th scope="col" className="p-sm text-right text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Fine</th>
+                    <th scope="col" className="p-sm text-right text-2xs font-semibold uppercase tracking-wider text-on-surface-variant">Edit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-container-high text-sm">
+                  {members.map(m => (
+                    <tr key={m.id} className="transition-colors duration-fast hover:bg-surface-bright">
+                      <td className="p-sm">
+                        <div className="flex items-center gap-sm">
+                          <Avatar seed={m.knust_id} name={m.full_name} src={m.avatar_url} size={36} />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-on-surface">{m.full_name}</p>
+                            <p className="font-mono text-2xs text-on-surface-variant">{m.knust_id}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="hidden p-sm text-xs text-on-surface-variant md:table-cell">{m.email}</td>
+                      <td className="hidden p-sm text-xs capitalize text-on-surface lg:table-cell">{m.user_type}</td>
+                      <td className="p-sm">
+                        <Badge tone={m.account_status === 'active' ? 'success' : 'danger'}>{m.account_status}</Badge>
+                      </td>
+                      <td className={`p-sm text-right text-xs font-semibold ${Number(m.fine_balance) > 0 ? 'text-error' : 'text-on-surface-variant'}`}>
+                        GH₵ {Number(m.fine_balance).toFixed(2)}
+                      </td>
+                      <td className="p-sm text-right">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(m)} aria-label={`Edit ${m.full_name}`}>
+                          <Icon name="pencil" size={16} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar pagination={pagination} onPageChange={load} />
+          </>
+        )}
+      </Card>
+
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Edit member" id="member-edit">
+        {editing && (
+          <form onSubmit={handleSave}>
+            <div className="space-y-md p-lg">
+              {modalErr && <Alert tone="danger" title="Update failed">{modalErr}</Alert>}
+              <div className="flex items-center gap-sm rounded-md bg-surface-container-low p-sm">
+                <Avatar seed={editing.knust_id} name={editing.full_name} src={editing.avatar_url} size={44} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-on-surface">{editing.full_name}</p>
+                  <p className="font-mono text-2xs text-on-surface-variant">{editing.knust_id}</p>
+                </div>
+              </div>
+              <Select
+                label="Account status"
+                value={form.account_status}
+                onChange={e => setForm({ ...form, account_status: e.target.value })}
+                options={STATUS_OPTIONS}
+              />
+              <Select
+                label="Member type"
+                value={form.user_type}
+                onChange={e => setForm({ ...form, user_type: e.target.value })}
+                options={TYPE_OPTIONS}
+              />
+            </div>
+            <div className="flex justify-end gap-sm border-t border-surface-container-high bg-surface-bright px-lg py-md">
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

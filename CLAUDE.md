@@ -1,0 +1,79 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+Tameion — a library management system for KNUST. Three-part repo: `server/` (Express + PostgreSQL, CommonJS), `client/` (React 18 + TypeScript + Vite + Tailwind), and a root workspace that owns only lint/format tooling. Each of `server/` and `client/` has its own `package.json` and `node_modules`; the root `package.json` is **not** a workspace root and does not install them.
+
+## Commands
+
+Root (lint/format across both packages):
+
+```bash
+npm run lint          # eslint . + client tsc --noEmit
+npm run format        # prettier --write
+```
+
+Server (`cd server`):
+
+```bash
+npm run dev           # node --watch index.js  (port 5000)
+npm test              # all Jest projects; integration tests self-skip without DATABASE_URL
+npm run test:unit     # unit project only, no DB
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/alms_test npm run test:integration
+npx jest --selectProjects integration -t "returns seeded books"   # single test by name
+npx jest tests/integration/books.test.js --runInBand --forceExit  # single file
+npm run migrate:up    # node-pg-migrate, migrations/ dir
+```
+
+Client (`cd client`):
+
+```bash
+npm run dev           # Vite on 5173, proxies /api → VITE_API_URL or localhost:5000
+npm run build         # tsc && vite build
+npx tsc --noEmit      # typecheck only
+```
+
+Docker (repo root) — `docker compose up --build` brings up db + server + client; `docker compose down -v` also wipes the volume. Note the dev compose file mounts `server/src/db/schema.sql` and `seed.sql` as Postgres init scripts, so **schema changes in dev only take effect after `down -v`**.
+
+CI (`.github/workflows/ci.yml`) runs eslint with `--max-warnings 0` in both packages, so a `no-unused-vars` warning fails the build.
+
+## Architecture
+
+### Two parallel schema definitions — keep in sync
+
+`server/src/db/schema.sql` (+ `seed.sql`) is what Docker and the Jest `globalSetup` (`tests/setup.js`) actually execute. `server/migrations/001_initial-schema.js` is the node-pg-migrate equivalent for production. **Any table/column change must be made in both places**, or tests and prod drift apart.
+
+### App factory pattern
+
+`server/src/app.js` exports `createApp({ enableRateLimit, enableCsrf })`; `index.js` calls it with defaults and also owns the two scheduled jobs (mark loans overdue, expire reservations) that run at startup and every 15 minutes. Tests call `createApp({ enableRateLimit: false, enableCsrf: false })` — see `tests/helpers/app.js`. Anything that must be exercised by tests belongs in `app.js`, not `index.js`.
+
+### Auth and CSRF
+
+Session-based via `express-session` + `connect-pg-simple` (`session` table). On login, `req.session.user = { id, name, role, knust_id, isStaff, emailVerified }` and a fresh `req.session.csrfToken` is generated. Role guards live in `middleware/auth.js`: `requirePatron` = student|faculty|postgraduate, `requireStaff` = librarian|admin.
+
+CSRF is a session-token double-submit: the client reads the token from the `/auth/login` or `/auth/me` response and `client/src/lib/api.ts` attaches it as `X-CSRF-Token` on every request. `/api/patron`, `/api/books`, `/api/admin` are fully protected; under `/api/auth` only `/login`, `/forgot-password`, `/reset-password`, `/verify-email` are exempt (register is **not** — deliberately). New non-GET endpoints outside those four paths need a client that carries the token.
+
+### API response envelope
+
+Every endpoint returns `{ success, data, message }`, and `client/src/lib/api.ts` throws the parsed body on non-2xx. Keep the shape — the whole client depends on it, and types live in `client/src/types.ts` mirrored per endpoint.
+
+### Server route layout
+
+Four routers: `auth.js`, `patron.js`, `books.js`, `admin.js`. `admin.js` is ~1000 lines and holds every staff operation (members, books, loans/checkout/return/renew, fines, reservations, staff, branches, reports, audit log, CSV import/export). Conventions inside it:
+
+- Multi-step writes take a client from the pool and use explicit `BEGIN`/`COMMIT`/`ROLLBACK` (checkout, return, fine payment).
+- Search inputs are passed through a local `escapeLike()` that escapes `%`, `_`, `\` before building `ILIKE` patterns — both `admin.js` and `books.js` define their own copy.
+- Staff mutations call `auditFromReq(req, action, entityType, entityId, details)` from `lib/audit.js`; it is fire-and-forget and swallows its own errors.
+- Overdue fines are computed on return at a hardcoded `ratePerDay = 1.00` GHS.
+
+Request bodies are validated with Zod schemas defined centrally in `middleware/validate.js` (not next to the routes) and applied as `validate(schema)`.
+
+### Client
+
+`main.tsx` wraps the app in `AuthProvider` + `ToastProvider` + `ErrorBoundary`. `AuthContext` is the single source of truth for the session: `login()` calls the API then re-fetches `/auth/me` for the full user. Route protection is `ProtectedRoute.tsx`; admin pages sit under `pages/admin/` behind `AdminLayout`. All network access goes through the single `api` object in `lib/api.ts` — add endpoints there rather than calling `fetch` from components (the two CSV export helpers are the intentional exceptions, since they return blobs).
+
+## Seeded test accounts
+
+`STU-2024001` (student), `FAC-2024010` (faculty), `LIB-001` (librarian) — all `password123`. The student is seeded with active loans, an overdue book, a reservation, and a fine balance.

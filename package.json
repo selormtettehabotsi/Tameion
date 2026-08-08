@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . && cd client && npx tsc --noEmit",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,css,md}\""
+  },
+  "dependencies": {
+    "docx": "^9.7.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.9.6"
+  }
+}

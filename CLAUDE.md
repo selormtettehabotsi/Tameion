@@ -42,7 +42,7 @@ Verification scripts (all require the stack to be up, except the image audit):
 ```bash
 bash scripts/smoke.sh          # every route's status, CSRF flow, role guards
 bash scripts/diff-schema.sh    # proves the two schema definitions match
-npm run verify:images          # every image URL returns HTTP 200
+npm run verify:images          # bundled images exist on disk and are valid JPEGs
 ```
 
 CI (`.github/workflows/ci.yml`) runs eslint with `--max-warnings 0` in both packages, so a `no-unused-vars` warning fails the build.

@@ -5,7 +5,8 @@
     "lint": "eslint . && cd client && npx tsc --noEmit",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,css,md}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,css,md}\""
+    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,css,md}\"",
+    "verify:images": "node scripts/verify-images.mjs"
   },
   "dependencies": {
     "docx": "^9.7.1"

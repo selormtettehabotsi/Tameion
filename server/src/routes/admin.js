@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db/pool');
+const logger = require('../lib/logger');
 const { requireAuth, requireStaff } = require('../middleware/auth');
 const { validate, checkoutSchema, bookSchema, bookUpdateSchema, memberUpdateSchema, staffCreateSchema, branchSchema } = require('../middleware/validate');
 const { auditFromReq } = require('../lib/audit');
@@ -75,7 +76,7 @@ router.get('/dashboard', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Admin dashboard error:', err);
+    logger.error({ err }, 'Admin dashboard error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -121,7 +122,7 @@ router.get('/members', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { members: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Members list error:', err);
+    logger.error({ err }, 'Members list error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -147,7 +148,7 @@ router.get('/members/:id', async (req, res) => {
     const { password_hash: _pw, ...memberData } = member.rows[0];
     res.json({ success: true, data: { ...memberData, loans: loans.rows }, message: '' });
   } catch (err) {
-    console.error('Member detail error:', err);
+    logger.error({ err }, 'Member detail error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -170,7 +171,7 @@ router.put('/members/:id', validate(memberUpdateSchema), async (req, res) => {
     res.json({ success: true, data: result.rows[0], message: 'Member updated' });
     auditFromReq(req, 'member.update', 'member', req.params.id, { full_name: result.rows[0].full_name });
   } catch (err) {
-    console.error('Member update error:', err);
+    logger.error({ err }, 'Member update error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -208,7 +209,7 @@ router.get('/export/books', async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename=books.csv');
     res.send(toCsv(columns, result.rows));
   } catch (err) {
-    console.error('Export books error:', err);
+    logger.error({ err }, 'Export books error');
     res.status(500).json({ success: false, data: null, message: 'Export failed' });
   }
 });
@@ -233,7 +234,7 @@ router.get('/export/members', async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename=members.csv');
     res.send(toCsv(columns, result.rows));
   } catch (err) {
-    console.error('Export members error:', err);
+    logger.error({ err }, 'Export members error');
     res.status(500).json({ success: false, data: null, message: 'Export failed' });
   }
 });
@@ -316,7 +317,7 @@ router.post('/import/books', express.text({ type: 'text/csv', limit: '5mb' }), a
       message: `Imported ${imported} books, skipped ${skipped}`,
     });
   } catch (err) {
-    console.error('Import books error:', err);
+    logger.error({ err }, 'Import books error');
     res.status(500).json({ success: false, data: null, message: 'Import failed' });
   }
 });
@@ -343,7 +344,7 @@ router.post('/books', validate(bookSchema), async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0], message: 'Book added' });
     auditFromReq(req, 'book.create', 'book', isbn, { title, author });
   } catch (err) {
-    console.error('Book create error:', err);
+    logger.error({ err }, 'Book create error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -377,7 +378,7 @@ router.put('/books/:isbn', validate(bookUpdateSchema), async (req, res) => {
     res.json({ success: true, data: result.rows[0], message: 'Book updated' });
     auditFromReq(req, 'book.update', 'book', req.params.isbn, { title: result.rows[0].title });
   } catch (err) {
-    console.error('Book update error:', err);
+    logger.error({ err }, 'Book update error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -403,7 +404,7 @@ router.delete('/books/:isbn', async (req, res) => {
     res.json({ success: true, data: result.rows[0], message: 'Book deleted' });
     auditFromReq(req, 'book.delete', 'book', req.params.isbn, { title: result.rows[0].title });
   } catch (err) {
-    console.error('Book delete error:', err);
+    logger.error({ err }, 'Book delete error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -455,7 +456,7 @@ router.get('/loans', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { loans: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Admin loans error:', err);
+    logger.error({ err }, 'Admin loans error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -526,7 +527,7 @@ router.post('/loans/checkout', validate(checkoutSchema), async (req, res) => {
     auditFromReq(req, 'loan.checkout', 'loan', loan.rows[0].id, { book_isbn, member_knust_id, title: bookResult.rows[0].title });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Checkout error:', err);
+    logger.error({ err }, 'Checkout error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   } finally {
     client.release();
@@ -604,7 +605,7 @@ router.post('/loans/:id/return', async (req, res) => {
     auditFromReq(req, 'loan.return', 'loan', req.params.id, { title: loan.rows[0].title, fineAmount });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Return error:', err);
+    logger.error({ err }, 'Return error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   } finally {
     client.release();
@@ -636,7 +637,7 @@ router.get('/fines', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { fines: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Admin fines error:', err);
+    logger.error({ err }, 'Admin fines error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -680,7 +681,7 @@ router.post('/fines/:id/pay', async (req, res) => {
     auditFromReq(req, 'fine.pay', 'fine', req.params.id, { amount: fine.rows[0].amount });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Fine pay error:', err);
+    logger.error({ err }, 'Fine pay error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   } finally {
     client.release();
@@ -734,7 +735,7 @@ router.get('/reservations', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { reservations: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Admin reservations error:', err);
+    logger.error({ err }, 'Admin reservations error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -753,7 +754,7 @@ router.post('/reservations/:id/fulfill', async (req, res) => {
     }
     res.json({ success: true, data: result.rows[0], message: 'Reservation fulfilled' });
   } catch (err) {
-    console.error('Reservation fulfill error:', err);
+    logger.error({ err }, 'Reservation fulfill error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -772,7 +773,7 @@ router.post('/reservations/:id/cancel', async (req, res) => {
     }
     res.json({ success: true, data: result.rows[0], message: 'Reservation cancelled' });
   } catch (err) {
-    console.error('Reservation cancel error:', err);
+    logger.error({ err }, 'Reservation cancel error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -822,7 +823,7 @@ router.post('/loans/:id/renew', async (req, res) => {
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Loan renew error:', err);
+    logger.error({ err }, 'Loan renew error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   } finally {
     client.release();
@@ -850,7 +851,7 @@ router.get('/staff', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { staff: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Staff list error:', err);
+    logger.error({ err }, 'Staff list error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -875,7 +876,7 @@ router.post('/staff', validate(staffCreateSchema), async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0], message: 'Staff member added' });
     auditFromReq(req, 'staff.create', 'staff', result.rows[0].id, { knust_staff_id, full_name, role: role || 'librarian' });
   } catch (err) {
-    console.error('Staff create error:', err);
+    logger.error({ err }, 'Staff create error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -896,7 +897,7 @@ router.put('/staff/:id', async (req, res) => {
     }
     res.json({ success: true, data: result.rows[0], message: 'Staff member updated' });
   } catch (err) {
-    console.error('Staff update error:', err);
+    logger.error({ err }, 'Staff update error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -964,7 +965,7 @@ router.get('/reports', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Reports error:', err);
+    logger.error({ err }, 'Reports error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -1006,7 +1007,7 @@ router.get('/audit-log', async (req, res) => {
     const p = paginated(result.rows, total, page, limit);
     res.json({ success: true, data: { entries: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
-    console.error('Audit log error:', err);
+    logger.error({ err }, 'Audit log error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -1018,7 +1019,7 @@ router.get('/branches', async (req, res) => {
     const result = await pool.query('SELECT * FROM branch_libraries ORDER BY branch_name');
     res.json({ success: true, data: result.rows, message: '' });
   } catch (err) {
-    console.error('Branches list error:', err);
+    logger.error({ err }, 'Branches list error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -1032,7 +1033,7 @@ router.post('/branches', validate(branchSchema), async (req, res) => {
     );
     res.status(201).json({ success: true, data: result.rows[0], message: 'Branch added' });
   } catch (err) {
-    console.error('Branch create error:', err);
+    logger.error({ err }, 'Branch create error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -1051,7 +1052,7 @@ router.put('/branches/:id', async (req, res) => {
     }
     res.json({ success: true, data: result.rows[0], message: 'Branch updated' });
   } catch (err) {
-    console.error('Branch update error:', err);
+    logger.error({ err }, 'Branch update error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });

@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db/pool');
+const logger = require('../lib/logger');
 const { requireAuth, requirePatron } = require('../middleware/auth');
 
 const router = express.Router();
@@ -86,7 +87,7 @@ router.get('/', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Books list error:', err);
+    logger.error({ err }, 'Books list error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -110,7 +111,7 @@ router.get('/:isbn', async (req, res) => {
 
     res.json({ success: true, data: result.rows[0], message: '' });
   } catch (err) {
-    console.error('Book detail error:', err);
+    logger.error({ err }, 'Book detail error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -161,7 +162,7 @@ router.post('/:isbn/reserve', requireAuth, requirePatron, async (req, res) => {
       message: 'Reservation placed successfully',
     });
   } catch (err) {
-    console.error('Reservation error:', err);
+    logger.error({ err }, 'Reservation error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });

@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const logger = require('../lib/logger');
 
 // In development, logs to console. In production, uses SMTP config from env vars.
 const transport = process.env.SMTP_HOST
@@ -18,8 +19,13 @@ const BASE_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 async function sendMail({ to, subject, html }) {
   if (!transport) {
-    console.log(`[mail] To: ${to} | Subject: ${subject}`);
-    console.log(`[mail] Body preview: ${html.replace(/<[^>]+>/g, '').slice(0, 200)}`);
+    // No SMTP configured. Log that the mail *would* have been sent, but never
+    // the body — it carries verification and password-reset tokens, and logs
+    // are usually shipped somewhere less trusted than the mailbox.
+    logger.info({ to, subject }, 'Mail suppressed (no SMTP configured)');
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug({ body: html.replace(/<[^>]+>/g, '').slice(0, 200) }, 'Mail body preview');
+    }
     return;
   }
   await transport.sendMail({ from: FROM, to, subject, html });

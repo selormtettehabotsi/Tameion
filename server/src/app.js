@@ -22,6 +22,15 @@ function createApp({ enableRateLimit = true, enableCsrf = true } = {}) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // The API only ever emits JSON, so it needs no script/style/image
+    // privileges of its own. frame-ancestors 'none' is the modern equivalent
+    // of X-Frame-Options: DENY (kept above for older browsers).
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    );
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
     next();
   });
 

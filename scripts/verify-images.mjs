@@ -28,15 +28,31 @@ const SIZES = [
   [600, 400],    // empty state
 ];
 
-const CONCURRENCY = 8;
+const CONCURRENCY = 5;
+const RETRIES = 3;
 
-async function head(url) {
-  try {
-    const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-    return res.status;
-  } catch (err) {
-    return `ERR ${err.message}`;
+/**
+ * Fetch a URL, retrying transport errors with backoff.
+ *
+ * Without this, a dropped connection under concurrency reports as a failure
+ * even though the image is fine. Only transport errors are retried — an HTTP
+ * status (including 404) is returned immediately, so a genuinely broken URL
+ * still fails the audit.
+ */
+async function check(url) {
+  let lastErr;
+  for (let attempt = 1; attempt <= RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      return res.status;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < RETRIES) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
   }
+  return `ERR ${lastErr?.message ?? 'unknown'}`;
 }
 
 async function main() {
@@ -65,7 +81,7 @@ async function main() {
     for (;;) {
       const url = queue.shift();
       if (!url) return;
-      const status = await head(url);
+      const status = await check(url);
       done++;
       if (status !== 200) failures.push({ url, status });
     }

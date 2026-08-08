@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db/pool');
+const logger = require('../lib/logger');
 const { requireAuth, requirePatron } = require('../middleware/auth');
 
 const router = express.Router();
@@ -66,7 +67,7 @@ router.get('/dashboard', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Dashboard error:', err);
+    logger.error({ err }, 'Dashboard error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -102,7 +103,7 @@ router.get('/loans', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Loans error:', err);
+    logger.error({ err }, 'Loans error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -142,7 +143,7 @@ router.get('/fines', async (req, res) => {
       message: '',
     });
   } catch (err) {
-    console.error('Fines error:', err);
+    logger.error({ err }, 'Fines error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -160,7 +161,7 @@ router.get('/reservations', async (req, res) => {
     );
     res.json({ success: true, data: result.rows, message: '' });
   } catch (err) {
-    console.error('Reservations error:', err);
+    logger.error({ err }, 'Reservations error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });

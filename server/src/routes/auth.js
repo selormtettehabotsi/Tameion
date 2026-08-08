@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const pool = require('../db/pool');
+const logger = require('../lib/logger');
 const { authLimiter } = require('../middleware/rateLimit');
 const { validate, registerSchema } = require('../middleware/validate');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email');
@@ -48,7 +49,7 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res)
       message: 'Registration successful. Please check your email to verify your account.',
     });
   } catch (err) {
-    console.error('Register error:', err);
+    logger.error({ err }, 'Register error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -81,7 +82,7 @@ router.post('/verify-email', async (req, res) => {
 
     res.json({ success: true, data: null, message: 'Email verified successfully' });
   } catch (err) {
-    console.error('Verify email error:', err);
+    logger.error({ err }, 'Verify email error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -153,7 +154,7 @@ router.post('/login', authLimiter, async (req, res) => {
       message: 'Login successful',
     });
   } catch (err) {
-    console.error('Login error:', err);
+    logger.error({ err }, 'Login error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -190,7 +191,7 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       message: 'If an account with that email exists, a reset link has been sent',
     });
   } catch (err) {
-    console.error('Forgot password error:', err);
+    logger.error({ err }, 'Forgot password error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -225,7 +226,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 
     res.json({ success: true, data: null, message: 'Password has been reset successfully' });
   } catch (err) {
-    console.error('Reset password error:', err);
+    logger.error({ err }, 'Reset password error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });

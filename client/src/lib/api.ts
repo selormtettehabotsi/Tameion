@@ -52,6 +52,13 @@ export const api = {
     if (res.data?.csrfToken) setCsrfToken(res.data.csrfToken);
     return res;
   },
+  /** Endpoint serving the signed-in user's own picture. */
+  myAvatarUrl: () => B + '/auth/avatar',
+  /** Endpoint serving a member's picture, for staff screens. */
+  memberAvatarUrl: (id: number) => B + '/admin/members/' + id + '/avatar',
+  uploadAvatar: (data: string, mime: string) =>
+    r<{ hasAvatar: boolean; bytes: number }>('/auth/avatar', { method: 'POST', body: j({ data, mime }) }),
+  deleteAvatar: () => r<{ hasAvatar: boolean }>('/auth/avatar', { method: 'DELETE' }),
   verifyEmail: (token: string) => r<null>('/auth/verify-email', { method: 'POST', body: j({ token }) }),
   forgotPassword: (email: string) => r<null>('/auth/forgot-password', { method: 'POST', body: j({ email }) }),
   resetPassword: (token: string, password: string) => r<null>('/auth/reset-password', { method: 'POST', body: j({ token, password }) }),

@@ -29,6 +29,8 @@ exports.up = (pgm) => {
     programme: { type: 'varchar(200)' },
     account_status: { type: 'varchar(20)', notNull: true, default: "'active'" },
     avatar_url: { type: 'varchar(500)' },
+    avatar_data: { type: 'bytea' },
+    avatar_mime: { type: 'varchar(30)' },
     password_hash: { type: 'varchar(200)', notNull: true },
     email_verified: { type: 'boolean', notNull: true, default: false },
     email_token: { type: 'varchar(64)' },
@@ -49,6 +51,8 @@ exports.up = (pgm) => {
       check: "role IN ('librarian', 'admin')",
     },
     branch_id: { type: 'integer', references: 'branch_libraries' },
+    avatar_data: { type: 'bytea' },
+    avatar_mime: { type: 'varchar(30)' },
     password_hash: { type: 'varchar(200)', notNull: true },
     created_at: { type: 'timestamp', notNull: true, default: pgm.func('NOW()') },
   });

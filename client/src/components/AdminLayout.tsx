@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import Icon, { type IconName } from './Icon';
 import Avatar from './Avatar';
+import { api } from '../lib/api';
 
 const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/admin', icon: 'layout-dashboard', label: 'Dashboard' },
@@ -48,15 +49,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Icon name="book-open" size={24} />
           Tameion
         </div>
-        <div className="flex items-center gap-sm">
-          <Avatar seed={user.knust_id} name={user.name} size={40} />
+        <Link
+          to="/profile"
+          onClick={() => setSideOpen(false)}
+          className="flex items-center gap-sm rounded-md p-2xs transition-colors duration-fast hover:bg-surface-container-high"
+        >
+          <Avatar
+            seed={user.knust_id}
+            name={user.name}
+            src={user.hasAvatar ? api.myAvatarUrl() : null}
+            size={40}
+          />
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-on-surface">{user.name}</h2>
             <p className="text-2xs uppercase tracking-wider text-on-surface-variant">
               {user.role === 'admin' ? 'Administrator' : 'Librarian'}
             </p>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2xs">

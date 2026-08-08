@@ -110,7 +110,8 @@ router.get('/members', async (req, res) => {
 
     const result = await pool.query(
       `SELECT m.id, m.knust_id, m.full_name, m.email, m.phone, m.user_type, m.programme,
-              m.account_status, m.avatar_url, m.created_at,
+              m.account_status, m.avatar_url,
+              m.avatar_data IS NOT NULL AS has_avatar, m.created_at,
               COALESCE(fa.outstanding_balance, 0) AS fine_balance
        FROM members m
        LEFT JOIN fine_accounts fa ON fa.member_id = m.id
@@ -123,6 +124,27 @@ router.get('/members', async (req, res) => {
     res.json({ success: true, data: { members: p.rows, pagination: p.pagination }, message: '' });
   } catch (err) {
     logger.error({ err }, 'Members list error');
+    res.status(500).json({ success: false, data: null, message: 'Server error' });
+  }
+});
+
+// Member's uploaded profile picture, for the staff-facing member list.
+router.get('/members/:id/avatar', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT avatar_data, avatar_mime FROM members WHERE id = $1',
+      [req.params.id]
+    );
+    const row = result.rows[0];
+    if (!row || !row.avatar_data) {
+      return res.status(404).json({ success: false, data: null, message: 'No profile picture set' });
+    }
+    res.setHeader('Content-Type', row.avatar_mime);
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+    res.send(row.avatar_data);
+  } catch (err) {
+    logger.error({ err }, 'Member avatar fetch error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });
   }
 });
@@ -145,8 +167,14 @@ router.get('/members/:id', async (req, res) => {
        WHERE lt.member_id = $1 ORDER BY lt.checkout_date DESC`, [req.params.id]
     );
 
-    const { password_hash: _pw, ...memberData } = member.rows[0];
-    res.json({ success: true, data: { ...memberData, loans: loans.rows }, message: '' });
+    // avatar_data is raw bytes — it must never be serialised into JSON; the
+    // picture is served by GET /members/:id/avatar instead.
+    const { password_hash: _pw, avatar_data: avatarData, ...memberData } = member.rows[0];
+    res.json({
+      success: true,
+      data: { ...memberData, has_avatar: avatarData != null, loans: loans.rows },
+      message: '',
+    });
   } catch (err) {
     logger.error({ err }, 'Member detail error');
     res.status(500).json({ success: false, data: null, message: 'Server error' });

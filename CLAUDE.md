@@ -96,6 +96,12 @@ Icons are inline SVG via `components/Icon.tsx` (Lucide geometry, `currentColor`)
 
 Shared UI lives in `components/ui/` (`Button`, `Input`, `Select`, `Badge`, `Card`, `Alert`) plus `Avatar`, `BookCover`, `EmptyState`, `StatCard`, `Modal`. `Modal` already handles focus trapping and Escape — use it instead of hand-rolling a dialog.
 
+### Profile pictures
+
+Avatars default to the person's **initials** on a deterministic token colour — never a stock photo of somebody else. Any signed-in account manages its own picture at `/profile` through `GET`/`POST`/`DELETE /api/auth/avatar`; the session decides whether `members` or `staff` is written, so the owner is never read from the body. Staff read member pictures via `GET /api/admin/members/:id/avatar`.
+
+The browser crops and re-encodes to a 256x256 JPEG on a canvas and posts base64 through the normal JSON parser — there is no multipart parser, so **don't add one without cause**. Bytes live in `avatar_data BYTEA` and must never be serialised into JSON (the member detail route strips it and returns `has_avatar`). `decodeAvatar()` in `middleware/validate.js` verifies magic bytes against the declared mime; SVG is rejected outright.
+
 ### Imagery
 
 All photography is **bundled**, not hotlinked: the files live in `client/public/img/` and every path is emitted by `src/lib/images.ts`. Covers and avatars are picked by an FNV-1a hash of the ISBN / KNUST id so they stay stable per record. Each photo is stored at one canonical size (`IMAGE_SIZES`) and scaled with CSS, so the helpers take no dimensions — pass `width`/`height` to the `<img>` as intrinsic attributes to reserve layout space.

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import Icon from './Icon';
 import Avatar from './Avatar';
+import { api } from '../lib/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -67,10 +68,14 @@ export default function Navbar() {
 
           {user ? (
             <>
-              <div className="hidden items-center gap-xs sm:flex">
-                <Avatar seed={user.knust_id} name={user.name} size={32} />
+              <Link
+                to="/profile"
+                className="hidden items-center gap-xs rounded-md px-2xs py-3xs transition-colors duration-fast hover:bg-surface-container-low sm:flex"
+                aria-label="Your profile"
+              >
+                <Avatar seed={user.knust_id} name={user.name} src={user.hasAvatar ? api.myAvatarUrl() : null} size={32} />
                 <span className="text-xs font-semibold text-on-surface">{user.name}</span>
-              </div>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="hidden items-center gap-2xs rounded-md px-sm py-2xs text-xs font-semibold text-on-surface-variant transition-colors duration-fast hover:bg-surface-container-low hover:text-primary md:inline-flex"
@@ -135,10 +140,14 @@ export default function Navbar() {
           </button>
           {user ? (
             <>
-              <div className="flex items-center gap-xs px-md py-xs text-xs text-on-surface-variant">
-                <Avatar seed={user.knust_id} name={user.name} size={28} />
+              <Link
+                to="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-xs rounded-md px-md py-xs text-sm font-semibold text-on-surface-variant transition-colors duration-fast hover:bg-surface-container-low"
+              >
+                <Avatar seed={user.knust_id} name={user.name} src={user.hasAvatar ? api.myAvatarUrl() : null} size={28} />
                 {user.name}
-              </div>
+              </Link>
               <button
                 onClick={() => {
                   setMenuOpen(false);

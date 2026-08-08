@@ -62,6 +62,70 @@ const staffCreateSchema = z.object({
   branch_id: z.number().int().optional().nullable(),
 });
 
+/**
+ * Profile picture upload.
+ *
+ * The client resizes the image to a small square and posts it as base64 in the
+ * JSON body, so no multipart parser is needed. This schema only checks shape
+ * and declared type — decodeAvatar() below verifies the bytes really are the
+ * image they claim to be.
+ */
+const AVATAR_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const AVATAR_MAX_BYTES = 512 * 1024;
+
+const avatarUploadSchema = z.object({
+  mime: z.enum(AVATAR_MIMES),
+  // Base64 payload, optionally still wrapped in a data: URI prefix.
+  data: z.string().min(1, 'Image data is required').max(1_400_000, 'Image is too large'),
+});
+
+/** Leading bytes that must be present for each accepted type. */
+const MAGIC = {
+  'image/jpeg': (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  'image/png': (b) =>
+    b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 &&
+    b[4] === 0x0d && b[5] === 0x0a && b[6] === 0x1a && b[7] === 0x0a,
+  'image/webp': (b) =>
+    b.slice(0, 4).toString('ascii') === 'RIFF' && b.slice(8, 12).toString('ascii') === 'WEBP',
+};
+
+/**
+ * Turn a validated upload into a Buffer, or explain why it is not usable.
+ *
+ * Never trust the declared mime: a .exe renamed to .jpg, or an SVG (which can
+ * carry script), would otherwise be stored and served back. Checking magic
+ * bytes against the declared type rejects both.
+ *
+ * @returns {{ buffer: Buffer, mime: string } | { error: string }}
+ */
+function decodeAvatar({ data, mime }) {
+  const base64 = data.includes(',') ? data.slice(data.indexOf(',') + 1) : data;
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64.replace(/\s/g, ''))) {
+    return { error: 'Image data is not valid base64' };
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, 'base64');
+  } catch {
+    return { error: 'Image data is not valid base64' };
+  }
+
+  if (buffer.length === 0) return { error: 'Image is empty' };
+  if (buffer.length > AVATAR_MAX_BYTES) {
+    return { error: `Image must be ${Math.floor(AVATAR_MAX_BYTES / 1024)}KB or smaller` };
+  }
+  if (buffer.length < 12) return { error: 'Image is truncated' };
+
+  const check = MAGIC[mime];
+  if (!check || !check(buffer)) {
+    return { error: 'File contents do not match the declared image type' };
+  }
+
+  return { buffer, mime };
+}
+
 const branchSchema = z.object({
   branch_name: z.string().min(1, 'Branch name is required').max(200),
   college: z.string().min(1, 'College is required').max(200),
@@ -83,5 +147,6 @@ function validate(schema) {
 module.exports = {
   registerSchema, loginSchema, checkoutSchema,
   bookSchema, bookUpdateSchema, memberUpdateSchema, staffCreateSchema, branchSchema,
+  avatarUploadSchema, decodeAvatar, AVATAR_MIMES, AVATAR_MAX_BYTES,
   validate,
 };

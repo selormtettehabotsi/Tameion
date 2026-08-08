@@ -149,7 +149,7 @@ export default function Members() {
                     <tr key={m.id} className="transition-colors duration-fast hover:bg-surface-bright">
                       <td className="p-sm">
                         <div className="flex items-center gap-sm">
-                          <Avatar seed={m.knust_id} name={m.full_name} src={m.avatar_url} size={36} />
+                          <Avatar seed={m.knust_id} name={m.full_name} src={m.has_avatar ? api.memberAvatarUrl(m.id) : m.avatar_url} size={36} />
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-on-surface">{m.full_name}</p>
                             <p className="font-mono text-2xs text-on-surface-variant">{m.knust_id}</p>
@@ -185,7 +185,7 @@ export default function Members() {
             <div className="space-y-md p-lg">
               {modalErr && <Alert tone="danger" title="Update failed">{modalErr}</Alert>}
               <div className="flex items-center gap-sm rounded-md bg-surface-container-low p-sm">
-                <Avatar seed={editing.knust_id} name={editing.full_name} src={editing.avatar_url} size={44} />
+                <Avatar seed={editing.knust_id} name={editing.full_name} src={editing.has_avatar ? api.memberAvatarUrl(editing.id) : editing.avatar_url} size={44} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-on-surface">{editing.full_name}</p>
                   <p className="font-mono text-2xs text-on-surface-variant">{editing.knust_id}</p>

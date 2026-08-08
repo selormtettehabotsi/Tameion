@@ -1,8 +1,10 @@
 export interface User {
+  id: number;
   name: string;
   role: string;
   knust_id: string;
   isStaff: boolean;
+  hasAvatar?: boolean;
   emailVerified?: boolean;
   csrfToken?: string;
 }
@@ -151,6 +153,7 @@ export interface Member {
   programme: string | null;
   account_status: string;
   avatar_url: string | null;
+  has_avatar?: boolean;
   created_at: string;
   fine_balance: string;
   loans?: Loan[];

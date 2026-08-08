@@ -27,6 +27,8 @@ CREATE TABLE members (
   programme VARCHAR(200),
   account_status VARCHAR(20) NOT NULL DEFAULT 'active',
   avatar_url VARCHAR(500),
+  avatar_data BYTEA,
+  avatar_mime VARCHAR(30),
   password_hash VARCHAR(200) NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   email_token VARCHAR(64),
@@ -44,6 +46,8 @@ CREATE TABLE staff (
   email VARCHAR(200) NOT NULL,
   role VARCHAR(20) NOT NULL CHECK (role IN ('librarian', 'admin')),
   branch_id INTEGER REFERENCES branch_libraries(id),
+  avatar_data BYTEA,
+  avatar_mime VARCHAR(30),
   password_hash VARCHAR(200) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

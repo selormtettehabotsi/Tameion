@@ -19,7 +19,6 @@ export const IMAGE_SIZES = {
   hero: { width: 1600, height: 900 },
   auth: { width: 1200, height: 1600 },
   cover: { width: 400, height: 600 },
-  avatar: { width: 160, height: 160 },
   empty: { width: 600, height: 400 },
 } as const;
 
@@ -34,14 +33,6 @@ const COVER_FILES = [
   'cover-10027581.jpg', 'cover-10060920.jpg', 'cover-1050736.jpg', 'cover-1098656.jpg',
   'cover-11197155.jpg', 'cover-1130980.jpg', 'cover-1132577.jpg', 'cover-11839922.jpg',
   'cover-1222551.jpg', 'cover-12391379.jpg', 'cover-1301585.jpg', 'cover-13556546.jpg',
-];
-
-/* ── Member avatars ─────────────────────────────────────────────────── */
-
-const AVATAR_FILES = [
-  'avatar-10417388.jpg', 'avatar-10500054.jpg', 'avatar-10554201.jpg', 'avatar-10604063.jpg',
-  'avatar-11395925.jpg', 'avatar-11655430.jpg', 'avatar-12311572.jpg', 'avatar-12497063.jpg',
-  'avatar-12750172.jpg', 'avatar-14183123.jpg',
 ];
 
 /* ── Empty states ───────────────────────────────────────────────────── */
@@ -73,11 +64,6 @@ export function coverFallback(isbn: string): string {
   return `${IMG}/${COVER_FILES[hash(isbn) % COVER_FILES.length]}`;
 }
 
-/** Deterministic portrait for a member, keyed on their KNUST id. */
-export function avatarFor(key: string): string {
-  return `${IMG}/${AVATAR_FILES[hash(key) % AVATAR_FILES.length]}`;
-}
-
 /** Illustrative photo for an empty list. */
 export function emptyStateImage(kind: EmptyStateKind): string {
   return `${IMG}/${EMPTY_FILES[kind]}`;
@@ -89,7 +75,6 @@ export function allImageUrls(): string[] {
     HERO_IMAGE,
     AUTH_IMAGE,
     ...COVER_FILES.map((f) => `${IMG}/${f}`),
-    ...AVATAR_FILES.map((f) => `${IMG}/${f}`),
     ...Object.values(EMPTY_FILES).map((f) => `${IMG}/${f}`),
   ];
 }

@@ -4,7 +4,9 @@ const crypto = require('crypto');
 const pool = require('../db/pool');
 const logger = require('../lib/logger');
 const { authLimiter } = require('../middleware/rateLimit');
-const { validate, registerSchema } = require('../middleware/validate');
+const { requireAuth } = require('../middleware/auth');
+const { validate, registerSchema, avatarUploadSchema, decodeAvatar } = require('../middleware/validate');
+const { auditFromReq } = require('../lib/audit');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email');
 
 const router = express.Router();
@@ -243,15 +245,108 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   if (!req.session || !req.session.user) {
     return res.status(401).json({ success: false, data: null, message: 'Not authenticated' });
   }
+  // hasAvatar is read live rather than cached on the session, so it is correct
+  // immediately after an upload or removal.
+  let hasAvatar = false;
+  try {
+    const table = req.session.user.isStaff ? 'staff' : 'members';
+    const result = await pool.query(
+      `SELECT avatar_data IS NOT NULL AS has_avatar FROM ${table} WHERE id = $1`,
+      [req.session.user.id]
+    );
+    hasAvatar = result.rows[0]?.has_avatar ?? false;
+  } catch (err) {
+    logger.error({ err }, 'Avatar presence lookup failed');
+  }
+
   res.json({
     success: true,
-    data: { ...req.session.user, csrfToken: req.session.csrfToken },
+    data: { ...req.session.user, hasAvatar, csrfToken: req.session.csrfToken },
     message: '',
   });
+});
+
+// ── PROFILE PICTURE ────────────────────────────────────────
+//
+// Everyone with an account manages their own picture through these three
+// routes; the session decides which table is touched, so patrons and staff
+// share one implementation.
+
+/** Which table the signed-in user lives in. Never taken from the request. */
+function ownerTable(req) {
+  return req.session.user.isStaff ? 'staff' : 'members';
+}
+
+// GET /api/auth/avatar — the signed-in user's own picture
+router.get('/avatar', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT avatar_data, avatar_mime FROM ${ownerTable(req)} WHERE id = $1`,
+      [req.session.user.id]
+    );
+    const row = result.rows[0];
+    if (!row || !row.avatar_data) {
+      return res.status(404).json({ success: false, data: null, message: 'No profile picture set' });
+    }
+    // Private: an avatar is personal data, so proxies must not cache it.
+    res.setHeader('Content-Type', row.avatar_mime);
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+    res.send(row.avatar_data);
+  } catch (err) {
+    logger.error({ err }, 'Avatar fetch error');
+    res.status(500).json({ success: false, data: null, message: 'Server error' });
+  }
+});
+
+// POST /api/auth/avatar — replace the signed-in user's picture
+router.post('/avatar', requireAuth, validate(avatarUploadSchema), async (req, res) => {
+  try {
+    const decoded = decodeAvatar(req.body);
+    if (decoded.error) {
+      return res.status(400).json({ success: false, data: null, message: decoded.error });
+    }
+
+    const result = await pool.query(
+      `UPDATE ${ownerTable(req)} SET avatar_data = $1, avatar_mime = $2 WHERE id = $3 RETURNING id`,
+      [decoded.buffer, decoded.mime, req.session.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, data: null, message: 'Account not found' });
+    }
+
+    res.json({
+      success: true,
+      data: { hasAvatar: true, bytes: decoded.buffer.length },
+      message: 'Profile picture updated',
+    });
+    auditFromReq(req, 'avatar.update', ownerTable(req), req.session.user.id, {
+      bytes: decoded.buffer.length,
+      mime: decoded.mime,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Avatar upload error');
+    res.status(500).json({ success: false, data: null, message: 'Server error' });
+  }
+});
+
+// DELETE /api/auth/avatar — revert to initials
+router.delete('/avatar', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE ${ownerTable(req)} SET avatar_data = NULL, avatar_mime = NULL WHERE id = $1`,
+      [req.session.user.id]
+    );
+    res.json({ success: true, data: { hasAvatar: false }, message: 'Profile picture removed' });
+    auditFromReq(req, 'avatar.delete', ownerTable(req), req.session.user.id, null);
+  } catch (err) {
+    logger.error({ err }, 'Avatar delete error');
+    res.status(500).json({ success: false, data: null, message: 'Server error' });
+  }
 });
 
 module.exports = router;

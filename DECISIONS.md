@@ -177,3 +177,43 @@ Trusting exactly one hop fixes all three without letting a client spoof
 `X-Forwarded-For` (which `trust proxy: true` would allow). This only surfaced
 once a real browser exercised the app through nginx — curl straight to :5000
 never sets the header, which is why the earlier verification runs missed it.
+
+## Profile pictures
+
+**Nobody is shown a stranger's face any more.** Avatars previously defaulted to
+a stock photograph of a real person chosen by hashing the account id, which
+presented an unrelated human as if they were the member. The default is now the
+person's **initials** on a deterministic colour from the token palette, and the
+ten `avatar-*.jpg` files have been deleted.
+
+**Anyone with an account can upload their own picture** at `/profile` —
+patrons and staff alike, through one set of routes (`GET`/`POST`/`DELETE
+/api/auth/avatar`). The session decides which table is written, so the owner is
+never taken from the request body.
+
+**Uploads go through the existing JSON body parser, not a multipart parser.**
+The browser centre-crops and re-encodes the image to a 256x256 JPEG on a
+canvas, then posts it as base64. That avoids a new dependency (multer/busboy),
+keeps payloads to a few tens of KB, and means no image decoding happens on the
+server.
+
+**Pictures are stored in Postgres as `bytea`, not on disk.** Files would need a
+persistent volume in both compose files and a backup story of their own; at a
+few tens of KB per person the bytes sit naturally beside the row they belong
+to and are covered by an ordinary database backup. `avatar_data` is never
+serialised into JSON — the member detail endpoint strips it and returns
+`has_avatar` instead, and images are served only by the dedicated routes.
+
+**The declared content type is never trusted.** `decodeAvatar()` checks magic
+bytes against the declared mime, so an SVG (which can carry script), an HTML
+document or a renamed executable is rejected even if it claims to be a JPEG.
+SVG is not an accepted type at all. Verified through the running stack, not
+just in unit tests.
+
+**Avatars are served `Cache-Control: private, no-cache`.** A profile picture is
+personal data and must not be held in a shared proxy cache; `no-cache` also
+means a replaced picture shows up immediately rather than after a TTL.
+
+**`avatar_url` is kept alongside the uploads.** Staff can still point a member
+at externally hosted artwork, and that path was already built and tested. An
+uploaded picture takes precedence over it.

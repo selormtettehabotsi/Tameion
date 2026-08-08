@@ -1,7 +1,18 @@
 const {
   validate, registerSchema, bookSchema, bookUpdateSchema,
-  memberUpdateSchema, checkoutSchema,
+  memberUpdateSchema, checkoutSchema, avatarUploadSchema, decodeAvatar,
 } = require('../../../src/middleware/validate');
+
+/** Minimal byte sequences carrying each format's magic number. */
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(64, 1),
+]);
+const WEBP = Buffer.concat([
+  Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBP'), Buffer.alloc(64, 1),
+]);
+const b64 = (buf) => buf.toString('base64');
 
 function runValidate(schema, body) {
   const req = { body };
@@ -206,6 +217,110 @@ describe('validate middleware', () => {
       const { req, next } = runValidate(memberUpdateSchema, { full_name: 'A', password_hash: 'x' });
       expect(next).toHaveBeenCalled();
       expect(req.body.password_hash).toBeUndefined();
+    });
+  });
+
+  // A profile picture is stored and served back to browsers, so the bytes must
+  // really be the image type they claim. Trusting the declared mime would let a
+  // renamed script or an SVG (which can carry JavaScript) through.
+  describe('avatar upload', () => {
+    describe('avatarUploadSchema', () => {
+      it('accepts a well-formed JPEG payload', () => {
+        const { next } = runValidate(avatarUploadSchema, { mime: 'image/jpeg', data: b64(JPEG) });
+        expect(next).toHaveBeenCalled();
+      });
+
+      it.each(['image/jpeg', 'image/png', 'image/webp'])('accepts %s', (mime) => {
+        const { next } = runValidate(avatarUploadSchema, { mime, data: b64(JPEG) });
+        expect(next).toHaveBeenCalled();
+      });
+
+      it.each(['image/svg+xml', 'text/html', 'application/octet-stream', 'image/gif'])(
+        'rejects the %s content type outright',
+        (mime) => {
+          const { res } = runValidate(avatarUploadSchema, { mime, data: b64(JPEG) });
+          expect(res.status).toHaveBeenCalledWith(400);
+        },
+      );
+
+      it('rejects an empty payload', () => {
+        const { res } = runValidate(avatarUploadSchema, { mime: 'image/jpeg', data: '' });
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+
+      it('rejects a payload beyond the base64 length cap', () => {
+        const { res } = runValidate(avatarUploadSchema, { mime: 'image/jpeg', data: 'A'.repeat(1_400_001) });
+        expect(res.status).toHaveBeenCalledWith(400);
+      });
+    });
+
+    describe('decodeAvatar', () => {
+      it.each([
+        ['jpeg', 'image/jpeg', JPEG],
+        ['png', 'image/png', PNG],
+        ['webp', 'image/webp', WEBP],
+      ])('accepts a real %s and returns its bytes', (_label, mime, buf) => {
+        const out = decodeAvatar({ mime, data: b64(buf) });
+        expect(out.error).toBeUndefined();
+        expect(out.mime).toBe(mime);
+        expect(Buffer.compare(out.buffer, buf)).toBe(0);
+      });
+
+      it('accepts a data: URI prefix, as the browser canvas produces', () => {
+        const out = decodeAvatar({ mime: 'image/jpeg', data: `data:image/jpeg;base64,${b64(JPEG)}` });
+        expect(out.error).toBeUndefined();
+        expect(Buffer.compare(out.buffer, JPEG)).toBe(0);
+      });
+
+      it('rejects PNG bytes declared as JPEG', () => {
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(PNG) });
+        expect(out.error).toMatch(/do not match/i);
+      });
+
+      it('rejects JPEG bytes declared as PNG', () => {
+        const out = decodeAvatar({ mime: 'image/png', data: b64(JPEG) });
+        expect(out.error).toMatch(/do not match/i);
+      });
+
+      it('rejects an SVG renamed as a JPEG', () => {
+        const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(svg) });
+        expect(out.error).toMatch(/do not match/i);
+      });
+
+      it('rejects an HTML document renamed as an image', () => {
+        const html = Buffer.from('<!doctype html><script>alert(1)</script>');
+        const out = decodeAvatar({ mime: 'image/png', data: b64(html) });
+        expect(out.error).toMatch(/do not match/i);
+      });
+
+      it('rejects a Windows executable renamed as an image', () => {
+        const exe = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64, 0)]);
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(exe) });
+        expect(out.error).toMatch(/do not match/i);
+      });
+
+      it('rejects data that is not base64 at all', () => {
+        const out = decodeAvatar({ mime: 'image/jpeg', data: 'not!!base64!!' });
+        expect(out.error).toMatch(/base64/i);
+      });
+
+      it('rejects a truncated file too short to identify', () => {
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(Buffer.from([0xff, 0xd8])) });
+        expect(out.error).toMatch(/truncated/i);
+      });
+
+      it('rejects an image over the 512KB cap', () => {
+        const big = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(520 * 1024, 7)]);
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(big) });
+        expect(out.error).toMatch(/512KB or smaller/);
+      });
+
+      it('accepts an image just under the cap', () => {
+        const nearly = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(500 * 1024, 7)]);
+        const out = decodeAvatar({ mime: 'image/jpeg', data: b64(nearly) });
+        expect(out.error).toBeUndefined();
+      });
     });
   });
 

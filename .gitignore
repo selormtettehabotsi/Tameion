@@ -30,3 +30,6 @@ pgdata/
 
 # Claude Code local config (may contain auth tokens)
 .claude/
+
+# Microsoft Office lock/owner files (created while a document is open)
+~$*

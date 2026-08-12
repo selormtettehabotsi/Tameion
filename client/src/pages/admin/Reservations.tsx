@@ -34,7 +34,12 @@ export default function Reservations() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [statusFilter]);
+  // Re-runs when the committed filter changes; `load` is intentionally
+  // excluded so that typing in the search box does not refetch.
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   const act = async (id: number, fn: (id: number) => Promise<unknown>, label: string) => {
     setBusyId(id);

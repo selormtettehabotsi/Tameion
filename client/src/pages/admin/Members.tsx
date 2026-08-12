@@ -49,7 +49,12 @@ export default function Members() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
+  // Re-runs when the committed filter changes; `load` is intentionally
+  // excluded so that typing in the search box does not refetch.
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const handleExport = async () => {
     try {

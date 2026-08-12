@@ -39,7 +39,12 @@ export default function AdminLoans() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
+  // Re-runs when the committed filter changes; `load` is intentionally
+  // excluded so that typing in the search box does not refetch.
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const message = (e: unknown, fallback: string) =>
     e instanceof Object && 'message' in e ? String(e.message) : fallback;

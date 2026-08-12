@@ -34,7 +34,12 @@ export default function AuditLog() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search]);
+  // Re-runs when the committed filter changes; `load` is intentionally
+  // excluded so that typing in the search box does not refetch.
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const info = (action: string) => actionIcons[action] || { icon: 'info' as IconName, color: 'text-on-surface-variant' };
 

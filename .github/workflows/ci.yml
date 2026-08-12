@@ -16,24 +16,21 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             client/package-lock.json
-            server/package-lock.json
+
+      # eslint and its config live at the repository root, and the flat config
+      # covers both packages. Linting from inside client/ or server/ pulls down
+      # a stray eslint and then cannot resolve the root config's imports.
+      - name: Install root tooling
+        run: npm ci
 
       - name: Install client deps
         run: npm ci
         working-directory: client
 
-      - name: Install server deps
-        run: npm ci
-        working-directory: server
-
-      - name: Lint client
+      - name: Lint (server and client)
         run: npx eslint . --max-warnings 0
-        working-directory: client
-
-      - name: Lint server
-        run: npx eslint . --max-warnings 0
-        working-directory: server
 
       - name: Typecheck client
         run: npx tsc --noEmit

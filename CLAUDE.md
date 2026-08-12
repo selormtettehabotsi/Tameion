@@ -45,7 +45,9 @@ bash scripts/diff-schema.sh    # proves the two schema definitions match
 npm run verify:images          # bundled images exist on disk and are valid JPEGs
 ```
 
-CI (`.github/workflows/ci.yml`) runs eslint with `--max-warnings 0` in both packages, so a `no-unused-vars` warning fails the build.
+CI (`.github/workflows/ci.yml`) runs `npx eslint . --max-warnings 0` **from the repository root**, so a single warning fails the build.
+
+Lint from the root, never from inside `client/` or `server/`: neither package has eslint as a dependency, so `npx eslint` there downloads a stray copy and then fails to resolve the root config's imports. The root flat config covers both packages, with the server as CommonJS and the client as TypeScript + React.
 
 ## Architecture
 

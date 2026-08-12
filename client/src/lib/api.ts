@@ -1,8 +1,8 @@
 import type {
-  ApiResponse, User, DashboardData, Loan, FinesData,
+  ApiResponse, User, DashboardData, FinesData,
   Reservation, BooksResponse, BookDetail,
   AdminDashboardData, Member, AdminLoan,
-  AdminFine, Branch, Book, PaginatedLoans,
+  Branch, Book, PaginatedLoans,
   PaginatedMembers, PaginatedAdminLoans, PaginatedAdminFines,
   PaginatedAdminReservations, StaffMember, PaginatedStaff,
   PaginatedAuditLog, ReportsData
